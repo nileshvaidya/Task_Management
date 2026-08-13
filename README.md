@@ -34,16 +34,25 @@ vercel.json
 
 ## 1. Create the Supabase project
 
-1. Go to [supabase.com](https://supabase.com) and create a new project.
-2. Open the **SQL Editor** and run the contents of
-   [`supabase/schema.sql`](./supabase/schema.sql). This creates the `tasks`
-   table and Row Level Security policies restricting every row to its owner.
-3. Under **Authentication -> Providers**, email/password auth is enabled by
-   default — that's all this app needs.
-   - Optional: under **Authentication -> Settings**, you can turn off "Confirm
-     email" during development so `signUp` returns a session immediately.
-4. Under **Project Settings -> API**, copy the **Project URL** and the
-   **anon public** key — you'll need both in the next steps.
+1. Go to [supabase.com](https://supabase.com) and log in (or sign up — "Continue with GitHub" is fastest).
+2. Click **New project** (top right of the dashboard, or on your organization's project list page).
+3. Pick/create an organization, then fill in the form:
+   - **Name**: `task-management`
+   - **Database Password**: generate one and save it somewhere safe (you won't need it for this app, but keep it)
+   - **Region**: whichever is closest to you
+   - **Plan**: Free is fine
+4. Click **Create new project** and wait ~1–2 minutes while it provisions.
+5. In the left sidebar, click **SQL Editor**.
+6. Click **New query**.
+7. Open [`supabase/schema.sql`](./supabase/schema.sql) in this repo, copy its full contents, and paste them into the query editor.
+8. Click **Run** (or press Ctrl/Cmd+Enter). You should see "Success. No rows returned."
+9. In the left sidebar, click **Authentication** → **Providers**, and confirm **Email** is enabled (it is by default — no action needed).
+10. Optional, for easier local testing: **Authentication** → **Settings** (or **Sign In / Providers** depending on Supabase's current UI) → under **Email Auth**, toggle off **Confirm email**, so `signUp` returns a session immediately instead of requiring an email click. Turn this back on before real users sign up.
+11. In the left sidebar, click the gear icon **Project Settings** → **API**.
+12. Copy the **Project URL** (looks like `https://xxxxxxxxxxxx.supabase.co`) — save it somewhere.
+13. Copy the **anon public** key (under "Project API keys") — save it too.
+
+You now have the two values (`SUPABASE_URL`, `SUPABASE_ANON_KEY`) needed for local dev and for Vercel in the next step.
 
 ## 2. Run it locally
 
@@ -74,20 +83,34 @@ git push -u origin <branch-name>
 
 ## 4. Deploy on Vercel
 
-1. Go to [vercel.com/new](https://vercel.com/new) and import the
-   `Task_Management` GitHub repository.
-2. Vercel will detect `vercel.json`; the build command (`npm run build`) and
-   output directory (`public`) are already configured there, so you don't
-   need to change the framework preset.
-3. Before the first deploy, add the environment variables from your `.env`
-   under **Project Settings -> Environment Variables** (set them for
-   Production, Preview, and Development):
-   - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY`
-4. Deploy. Every push to `main` redeploys production; every other branch/PR
-   gets its own preview URL with the same env vars.
-5. Once deployed, open the Vercel URL and repeat the smoke test from step 2
-   (sign up, add/complete/delete a task) against the live site.
+1. Go to [vercel.com](https://vercel.com) and log in (or sign up — "Continue with GitHub" is fastest, and links your GitHub account so Vercel can see your repos).
+2. Click **Add New...** (top right) → **Project**. (Or go straight to [vercel.com/new](https://vercel.com/new).)
+3. Under "Import Git Repository", find `nileshvaidya/Task_Management` in the list.
+   - If it's not listed, click **Adjust GitHub App Permissions**, then either grant access to **All repositories** or choose **Only select repositories** and add `Task_Management`, then save and return to Vercel.
+4. Click **Import** next to `Task_Management`.
+5. On the "Configure Project" screen:
+   - **Project Name**: leave the default, or rename it.
+   - **Framework Preset**: it may show "Other" — that's fine, `vercel.json` already sets the build command and output directory.
+   - Click to expand **Environment Variables**.
+   - Add one: **Name** = `SUPABASE_URL`, **Value** = the Project URL you copied in step 1.12. Leave all environments (Production, Preview, Development) checked.
+   - Click **Add**, then add a second one: **Name** = `SUPABASE_ANON_KEY`, **Value** = the anon key from step 1.13. Same environments checked.
+6. Click **Deploy**.
+7. Wait for the build to finish (you'll see live build logs, usually 30–60 seconds).
+8. On the success screen, click the deployment preview image or the **Visit** / **Continue to Dashboard** → **Visit** button to open the live URL (something like `task-management-xxxx.vercel.app`).
+
+Every push to `main` redeploys production at that same URL; every other branch or pull request automatically gets its own preview URL with the same environment variables.
+
+## 5. Verify the live deployment
+
+1. On the live URL, you should land on the sign-in/sign-up page.
+2. Click the **Sign Up** tab, enter an email and a password (6+ characters), click **Create Account**.
+   - If you left "Confirm email" on in Supabase, check that inbox and click the confirmation link, then come back and sign in with the same credentials.
+   - If you turned it off, you'll be redirected straight into the app.
+3. Add a task: type a title (and optionally a description), click **Add Task** — it should appear at the top of the list immediately.
+4. Click the checkbox next to it to mark it complete (the title gets struck through), then click the **Active** and **Completed** filter tabs to confirm filtering works.
+5. Click **Delete** on the task to remove it.
+6. Click **Log out**, confirm you're returned to the sign-in page, and that visiting `/app.html` directly redirects you back to sign-in.
+7. Back in the Supabase dashboard, open **Table Editor** → `tasks` to see the rows you created/deleted reflected directly in the database.
 
 ## Notes
 
