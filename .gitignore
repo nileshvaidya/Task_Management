@@ -1,0 +1,7 @@
+node_modules/
+.env
+.env.local
+public/css/styles.css
+public/js/config.js
+public/js/vendor/
+.vercel

@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build (Tailwind CSS + Supabase config)
+        run: npm run build
+        env:
+          # Real secrets are optional here: this job only verifies the build
+          # succeeds (Tailwind compiles, config.js is generated). Set
+          # SUPABASE_URL / SUPABASE_ANON_KEY as repo secrets to build against
+          # your actual project instead of the placeholder values.
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
+
+      - name: Verify build output
+        run: |
+          test -f public/css/styles.css
+          test -f public/js/config.js
