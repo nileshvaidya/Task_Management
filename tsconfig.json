@@ -11,6 +11,6 @@
     "skipLibCheck": true,
     "types": ["vite/client", "vitest/globals", "node"]
   },
-  "include": ["src/**/*.js", "scripts/**/*.js", "vite.config.js", "tailwind.config.js"],
+  "include": ["src/**/*.js", "scripts/**/*.js", "scripts/**/*.mjs", "vite.config.js", "tailwind.config.js"],
   "exclude": ["node_modules", "dist", "design-reference"]
 }

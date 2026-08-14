@@ -12,7 +12,7 @@ export default [
     },
   },
   {
-    files: ['scripts/**/*.js', '*.config.js'],
+    files: ['scripts/**/*.js', 'scripts/**/*.mjs', '*.config.js'],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
