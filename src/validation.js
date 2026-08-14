@@ -1,6 +1,8 @@
 // Pure validation logic — no DOM, no Supabase — so it's cheap to unit test
 // directly (per the build brief's testing guidance) rather than only
 // through a full form-submission e2e test.
+import { isPastDate, todayISODate } from './dateUtils.js';
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
@@ -40,5 +42,24 @@ export function validateSigninForm(form) {
   const { email = '', password = '' } = form || {};
   if (!email.trim()) errors.email = 'Email is required.';
   if (!password) errors.password = 'Password is required.';
+  return { valid: Object.keys(errors).length === 0, errors };
+}
+
+/**
+ * @param {{ title?: string, dueDate?: string }} form
+ * @param {string} [today] YYYY-MM-DD, injectable for tests
+ */
+export function validateNewTaskForm(form, today = todayISODate()) {
+  /** @type {Record<string, string>} */
+  const errors = {};
+  const { title = '', dueDate = '' } = form || {};
+
+  if (!title.trim()) errors.title = 'Title is required.';
+  if (!dueDate) {
+    errors.dueDate = 'Date is required.';
+  } else if (isPastDate(dueDate, today)) {
+    errors.dueDate = 'Date cannot be in the past.';
+  }
+
   return { valid: Object.keys(errors).length === 0, errors };
 }

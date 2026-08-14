@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "seed": "node scripts/seed.js",
-    "test:integration": "node scripts/test-rls-users.mjs"
+    "test:integration": "node scripts/test-rls-users.mjs && node scripts/test-rls-tasks.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.11.0",

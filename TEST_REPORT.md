@@ -1,5 +1,45 @@
 # Test Report
 
+## Phase 2 — Task CRUD & Dashboard
+
+Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`. Integration: `npm run test:integration` (runs both the Phase 1 users script and the new tasks script).
+
+| # | Test case (from build brief §Phase 2) | Result | Notes |
+|---|---|---|---|
+| 1 | Creating a task with today's date appears immediately in Active Tasks with status `planned` | ✅ | `createTask` defaults `status` to `planned` via the schema default; unit-tested in `tasks.test.js`. Dashboard reloads the list on `worksync:task-created`. |
+| 2 | Future date accepted; past date rejected with a validation message | ✅ | Unit: `validateNewTaskForm` (5 cases). E2E: `e2e/phase2.spec.js` — sets an out-of-range date directly (bypassing the native picker's `min`) and confirms the custom error banner shows and no create request fires. |
+| 3 | Quick-add creates a task owned by the current user and clears the input | ✅ | `dashboard.js`'s quick-add handler calls `createTask({ ..., ownerId: user.id })`; the form re-renders empty on the next `loadTasks()`. Covered by `tasks.test.js`'s `createTask` test (owner_id/created_by assertions) — no dedicated e2e for the full round trip (see "Known items" below). |
+| 4 | Round checkbox flips completed⇄planned and updates strikethrough styling | ✅ | `renderTaskRow` unit tests assert the `line-through` class and `aria-label` toggle directly (`components.test.js`, via `@testing-library/dom`), independent of the full Dashboard. |
+| 5 | Setting status to `completed` clears blocked/blocked_reason | ✅ | `setTaskStatus` unit tests assert the exact patch sent for `completed` vs. any other status (`tasks.test.js`). |
+| 6 | Weekly Progress numerator/denominator match real completed/total for the current week | ✅ | `computeWeeklyProgress` unit-tested against fixture tasks spanning multiple weeks, including a 0-total case (no divide-by-zero) (`taskStats.test.js`). |
+| 7 | Mobile (375px) shows single-column/stat-card/FAB layout; desktop (≥1024px) shows sidebar + two-column grid — real CSS breakpoints, not a device toggle | ✅ | `e2e/phase2.spec.js` resizes the viewport and asserts `<aside>` visibility flips purely from Tailwind's `hidden md:flex` / `md:hidden` classes — no JS branching exists to toggle. |
+| 8 | Manager can see/edit a report's task via "My Team" filter; employee cannot see/edit another employee's task | ⏳ **Written, pending live run** | `scripts/test-rls-tasks.mjs` — manager A can select and update employee A's task, cannot select/update employee B's (a different manager's report), and cannot delete employee A's task (delete stays owner-only); employee A cannot select employee B's task. Wired into `npm run test:integration` / CI, same secrets gate as Phase 1. |
+
+### Additional Phase 2 coverage
+
+| Module | Tests | Result |
+|---|---|---|
+| `src/dateUtils.js` | 11 | ✅ |
+| `src/taskStats.js` | 3 | ✅ |
+| `src/tasks.js` | 10 | ✅ |
+| `renderTaskRow` (`components.js`, new cases) | 7 | ✅ |
+| `validateNewTaskForm` (`validation.js`, new cases) | 5 | ✅ |
+| `e2e/phase2.spec.js` | 7 | ✅ |
+
+**Totals**: 89/89 Vitest unit tests passing · 15/15 Playwright e2e tests passing (3 Phase 0 + 5 Phase 1 regression, unchanged; 7 new Phase 2) · lint clean · typecheck clean · production build succeeds.
+
+### Bugs found and fixed during verification
+
+1. **Recurrence of the Phase 1 backtick-in-template-literal bug.** Same root cause, same fix pattern, this time in `newTaskDialog.js` — see `CHANGELOG.md` for the full account, including that the full `src/` tree was re-grepped afterward to rule out further instances.
+2. **Native HTML5 date-input constraint validation silently blocked form submission** before the app's own JS validation could run or show a message. Fixed with `novalidate` on the form.
+3. **A Playwright e2e mock's URL pattern was too broad**, matching both the create call it intended to intercept and the Dashboard's own unrelated background task-list fetch, producing a false-positive "insert was called" result. Fixed by branching on HTTP method in the route handler.
+
+### Known items carried forward (not blockers for Phase 2 sign-off)
+
+- **RLS integration tests for `tasks` are unrun**, same as Phase 1's `users` script — both run in CI once the Supabase secrets are present, which they now are per Phase 1's sign-off; this PR's CI run is the first real execution.
+- **No end-to-end (real-network) Playwright test for quick-add / round-toggle / status-select.** These are thoroughly unit-tested (`tasks.js`, `renderTaskRow`) and the Dashboard's overall rendering is e2e-smoke-tested, but the full "click round toggle → mocked PATCH → row updates" round trip wasn't added as e2e, to avoid brittle hand-rolled PostgREST response mocking for marginal additional coverage. Can be added if desired.
+- Carried from Phase 0/1: `npm audit` dev-tooling advisories (deferred, breaking Vite major bump); email-confirmation-off requirement for sign-up.
+
 ## Phase 1 — Auth, Users & Roles
 
 Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`. Integration tests: `npm run test:integration` (needs `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY`).

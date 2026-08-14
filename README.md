@@ -15,7 +15,7 @@ acceptance workflow. Built to the "Nocturne" dark-theme design system.
 
 This project is being built in phases per the build brief; see
 `CHANGELOG.md` for what's shipped and `TEST_REPORT.md` for test results per
-phase. **Current status: Phase 1 (Auth, Users & Roles) complete.**
+phase. **Current status: Phase 2 (Task CRUD & Dashboard) complete.**
 
 ## Project layout
 
@@ -26,21 +26,26 @@ src/
   router.js                # hash router (#/dashboard, #/team, #/admin, #/login) + auth guard
   api.js                    # Supabase client
   auth.js                    # session/profile helpers, signIn/signUp/signOutUser
-  validation.js                # pure form-validation logic
+  validation.js                # pure form-validation logic (signup/signin/new-task)
   demoMode.js                   # VITE_DEMO_MODE + ?demoRole= dev bypass
   state.js                       # small in-memory store + pub-sub
-  components.js                   # shared render helpers (escapeHtml, renderIdentityBlock)
-  screens/                         # dashboard.js, team.js, admin.js, login.js
-  dialogs/                          # newTaskDialog.js
+  tasks.js                        # task CRUD data layer
+  dateUtils.js                     # pure date helpers (today, week range, calendar cells)
+  taskStats.js                      # pure calculations (weekly progress, ...)
+  layout.js                          # shared app shell (desktop sidebar / mobile top bar+tabs)
+  components.js                       # shared render helpers (escapeHtml, renderIdentityBlock, renderTaskRow)
+  screens/                             # dashboard.js, team.js, admin.js, login.js
+  dialogs/                              # newTaskDialog.js
   styles/
-    tailwind-base.css                # @tailwind base
-    nocturne.css                      # ported verbatim from design-reference/
-    tailwind-components-utilities.css  # @tailwind components/utilities
+    tailwind-base.css                    # @tailwind base
+    nocturne.css                          # ported verbatim from design-reference/
+    tailwind-components-utilities.css      # @tailwind components/utilities
 scripts/
-  seed.js                # demo user seeding (Sarah Jenkins/manager, David Chen + Marcus Cole/employees)
-  test-rls-users.mjs      # RLS integration tests against a real Supabase project
+  seed.js                 # demo user seeding (Sarah Jenkins/manager, David Chen + Marcus Cole/employees)
+  test-rls-users.mjs       # RLS integration tests for the users table
+  test-rls-tasks.mjs        # RLS integration tests for the tasks table
 supabase/
-  schema.sql               # users table + RLS policies (Phase 1)
+  schema.sql               # users + tasks/projects tables, RLS policies
 design-reference/        # the Nocturne design system + prototype handoff
 e2e/                      # Playwright specs
 vite.config.js, tailwind.config.js, playwright.config.js, eslint.config.js, tsconfig.json
@@ -53,7 +58,7 @@ npm install
 cp .env.example .env      # fill in VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
 ```
 
-Before first run, apply `supabase/schema.sql` in your Supabase project's SQL editor, and disable **Authentication → Providers → Email → Confirm email** (see `supabase/README.md` for why).
+Before first run, apply `supabase/schema.sql` in your Supabase project's SQL editor (it's additive/idempotent — safe to re-run if you already applied the Phase 1 version, it'll just add the Phase 2 `tasks`/`projects` tables), and disable **Authentication → Providers → Email → Confirm email** (see `supabase/README.md` for why).
 
 ```bash
 npm run dev                # http://localhost:5173

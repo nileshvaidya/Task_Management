@@ -8,9 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://placeholder.supabase.co' }}
-      VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
     steps:
       - uses: actions/checkout@v5
 
@@ -27,6 +24,13 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      # Deliberately no VITE_SUPABASE_* env vars here: unit tests must never
+      # depend on network reachability. With them set, `supabase` becomes a
+      # real (but unreachable) client and any module that fetches on
+      # render — e.g. dashboard.js's background task list — can hang or
+      # time out against the placeholder host, which is exactly what broke
+      # this step in CI (passed locally every time, since local `npm test`
+      # never sets these vars either).
       - name: Unit tests (Vitest)
         run: npm test
 
@@ -35,9 +39,15 @@ jobs:
 
       - name: E2E tests (Playwright)
         run: npm run e2e
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
 
       - name: Build
         run: npm run build
+        env:
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
 
       - name: Upload Playwright report
         if: failure()

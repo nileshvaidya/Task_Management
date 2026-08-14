@@ -1,9 +1,36 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { getByRole } from '@testing-library/dom';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { getByText } from '@testing-library/dom';
 import { renderRoute, normalizePath } from './router.js';
 
 const authed = async () => ({ id: 'u1' });
 const anon = async () => null;
+
+// The router's own guard (mocked per-test via the sessionCheck param below)
+// is separate from each screen module's own getCurrentProfile() call,
+// which it uses to render the user's name/identity block. Override only
+// that export — getSessionUser must stay real, since login.js's own
+// "already signed in, redirect forward" check also calls it, and a global
+// fake session there would break every "shows the login screen" case.
+vi.mock('./auth.js', async (importOriginal) => {
+  const actual = /** @type {object} */ (await importOriginal());
+  return {
+    ...actual,
+    getCurrentProfile: vi.fn(async () => ({ id: 'u1', name: 'Test User', email: 'test@example.com', role: 'employee' })),
+  };
+});
+
+// dashboard.js fetches tasks on render. Unit tests must never depend on
+// network reachability regardless of what VITE_SUPABASE_URL happens to be
+// set to in the ambient environment — mock this unconditionally rather
+// than relying on it being unset (see CHANGELOG for the CI incident this
+// gap caused).
+vi.mock('./tasks.js', () => ({
+  fetchMyTasks: vi.fn(async () => []),
+  fetchTeamTasks: vi.fn(async () => []),
+  createTask: vi.fn(),
+  setTaskStatus: vi.fn(),
+  toggleTaskDone: vi.fn(),
+}));
 
 describe('normalizePath', () => {
   it('maps known hashes to their route', () => {
@@ -29,7 +56,7 @@ describe('renderRoute — protected routes with a session', () => {
     const path = await renderRoute(container, '#/dashboard', authed);
     expect(path).toBe('/dashboard');
     expect(container.querySelector('[data-screen="dashboard"]')).toBeTruthy();
-    expect(getByRole(container, 'heading', { name: /dashboard/i })).toBeTruthy();
+    expect(getByText(container, /good morning/i)).toBeTruthy();
   });
 
   it('mounts the team screen for #/team when signed in', async () => {
