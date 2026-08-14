@@ -19,6 +19,19 @@ vi.mock('./auth.js', async (importOriginal) => {
   };
 });
 
+// dashboard.js fetches tasks on render. Unit tests must never depend on
+// network reachability regardless of what VITE_SUPABASE_URL happens to be
+// set to in the ambient environment — mock this unconditionally rather
+// than relying on it being unset (see CHANGELOG for the CI incident this
+// gap caused).
+vi.mock('./tasks.js', () => ({
+  fetchMyTasks: vi.fn(async () => []),
+  fetchTeamTasks: vi.fn(async () => []),
+  createTask: vi.fn(),
+  setTaskStatus: vi.fn(),
+  toggleTaskDone: vi.fn(),
+}));
+
 describe('normalizePath', () => {
   it('maps known hashes to their route', () => {
     expect(normalizePath('#/dashboard')).toBe('/dashboard');
