@@ -1,5 +1,14 @@
 # Changelog
 
+## Deployment fix (post-Phase-2, found in production)
+
+After merging Phase 2, the live app returned `404: NOT_FOUND` on every route, then (once that was fixed) `Supabase is not configured` on sign-up. Neither was catchable from CI/local — both only manifest against the real Vercel project's dashboard state.
+
+1. **`404: NOT_FOUND` on every route.** This Vercel project was originally set up for the pre-WorkSync scaffold, which built to `public/` via a `vercel.json` removed in Phase 0 once the app became Vite-based (Vite builds to `dist/`) — flagged as an open item in the Phase 0 PR but never confirmed fixed. The dashboard's build/output settings apparently still carried that old override. Fixed by adding an explicit `vercel.json` pinning `buildCommand`/`outputDirectory`, which takes precedence over dashboard settings regardless of what's saved there.
+2. **`Supabase is not configured` on sign-up.** The Vercel project had `SUPABASE_URL`/`SUPABASE_ANON_KEY` configured (the names used by the trusted Node-only scripts and CI secrets) but not the `VITE_`-prefixed versions the actual client build reads — Vite only exposes `VITE_`-prefixed env vars to the browser bundle. Fixed by adding `VITE_SUPABASE_URL`/`VITE_SUPABASE_ANON_KEY` as their own separate variables in the Vercel project, scoped to Production and Preview.
+
+Both confirmed fixed by testing sign-up and task creation on a fresh deployment after the fixes.
+
 ## Phase 2 — Task CRUD & Dashboard
 
 - `tasks` (+ `projects`) tables + RLS (`supabase/schema.sql`): owner full CRUD on their own tasks; manager can view/update (not delete) their direct reports' tasks — the Dashboard's "My Team" filter. Full data-model contract (dependency/acceptance columns) created now so the shape is stable for Phase 5, but only owner/manager CRUD is wired up yet.
