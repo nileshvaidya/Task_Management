@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { getByRole } from '@testing-library/dom';
 import { renderRoute, normalizePath } from './router.js';
 
+const authed = async () => ({ id: 'u1' });
+const anon = async () => null;
+
 describe('normalizePath', () => {
   it('maps known hashes to their route', () => {
     expect(normalizePath('#/dashboard')).toBe('/dashboard');
@@ -15,32 +18,64 @@ describe('normalizePath', () => {
   });
 });
 
-describe('renderRoute', () => {
+describe('renderRoute — protected routes with a session', () => {
   let container;
 
   beforeEach(() => {
     container = document.createElement('div');
   });
 
-  it('mounts the dashboard screen for #/dashboard', async () => {
-    const path = await renderRoute(container, '#/dashboard');
+  it('mounts the dashboard screen for #/dashboard when signed in', async () => {
+    const path = await renderRoute(container, '#/dashboard', authed);
     expect(path).toBe('/dashboard');
     expect(container.querySelector('[data-screen="dashboard"]')).toBeTruthy();
     expect(getByRole(container, 'heading', { name: /dashboard/i })).toBeTruthy();
   });
 
-  it('mounts the team screen for #/team', async () => {
-    await renderRoute(container, '#/team');
+  it('mounts the team screen for #/team when signed in', async () => {
+    await renderRoute(container, '#/team', authed);
     expect(container.querySelector('[data-screen="team"]')).toBeTruthy();
   });
 
-  it('mounts the admin screen for #/admin', async () => {
-    await renderRoute(container, '#/admin');
+  it('mounts the admin screen for #/admin when signed in', async () => {
+    await renderRoute(container, '#/admin', authed);
     expect(container.querySelector('[data-screen="admin"]')).toBeTruthy();
   });
+});
 
+describe('renderRoute — auth guard', () => {
+  let container;
+
+  beforeEach(() => {
+    container = document.createElement('div');
+  });
+
+  it('redirects an unauthenticated visitor to login instead of the dashboard', async () => {
+    const path = await renderRoute(container, '#/dashboard', anon);
+    expect(path).toBe('/login');
+    expect(container.querySelector('[data-screen="login"]')).toBeTruthy();
+  });
+
+  it('redirects an unauthenticated visitor away from team and admin too', async () => {
+    expect(await renderRoute(container, '#/team', anon)).toBe('/login');
+    expect(await renderRoute(container, '#/admin', anon)).toBe('/login');
+  });
+
+  it('never calls the session check for the public login route', async () => {
+    let called = false;
+    const spy = async () => {
+      called = true;
+      return null;
+    };
+    await renderRoute(container, '#/login', spy);
+    expect(called).toBe(false);
+  });
+});
+
+describe('renderRoute — unknown hash', () => {
   it('mounts the login screen by default for an unrecognized hash', async () => {
-    const path = await renderRoute(container, '#/nonexistent');
+    const container = document.createElement('div');
+    const path = await renderRoute(container, '#/nonexistent', anon);
     expect(path).toBe('/login');
     expect(container.querySelector('[data-screen="login"]')).toBeTruthy();
   });

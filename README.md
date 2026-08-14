@@ -15,7 +15,7 @@ acceptance workflow. Built to the "Nocturne" dark-theme design system.
 
 This project is being built in phases per the build brief; see
 `CHANGELOG.md` for what's shipped and `TEST_REPORT.md` for test results per
-phase. **Current status: Phase 0 (Foundation) complete.**
+phase. **Current status: Phase 1 (Auth, Users & Roles) complete.**
 
 ## Project layout
 
@@ -23,19 +23,24 @@ phase. **Current status: Phase 0 (Foundation) complete.**
 index.html              # single shell — <main id="app">, dialog mount point
 src/
   main.js                 # entry: imports styles, starts the router
-  router.js                # hash router (#/dashboard, #/team, #/admin, #/login)
+  router.js                # hash router (#/dashboard, #/team, #/admin, #/login) + auth guard
   api.js                    # Supabase client
-  state.js                   # small in-memory store + pub-sub
-  components.js               # shared render helpers (e.g. escapeHtml)
-  screens/                     # dashboard.js, team.js, admin.js, login.js
-  dialogs/                      # newTaskDialog.js
+  auth.js                    # session/profile helpers, signIn/signUp/signOutUser
+  validation.js                # pure form-validation logic
+  demoMode.js                   # VITE_DEMO_MODE + ?demoRole= dev bypass
+  state.js                       # small in-memory store + pub-sub
+  components.js                   # shared render helpers (escapeHtml, renderIdentityBlock)
+  screens/                         # dashboard.js, team.js, admin.js, login.js
+  dialogs/                          # newTaskDialog.js
   styles/
-    tailwind-base.css            # @tailwind base
-    nocturne.css                  # ported verbatim from design-reference/
+    tailwind-base.css                # @tailwind base
+    nocturne.css                      # ported verbatim from design-reference/
     tailwind-components-utilities.css  # @tailwind components/utilities
 scripts/
-  seed.js                # demo user seeding (targets the Phase 1 schema)
-supabase/                # schema.sql lands in Phase 1
+  seed.js                # demo user seeding (Sarah Jenkins/manager, David Chen + Marcus Cole/employees)
+  test-rls-users.mjs      # RLS integration tests against a real Supabase project
+supabase/
+  schema.sql               # users table + RLS policies (Phase 1)
 design-reference/        # the Nocturne design system + prototype handoff
 e2e/                      # Playwright specs
 vite.config.js, tailwind.config.js, playwright.config.js, eslint.config.js, tsconfig.json
@@ -46,17 +51,29 @@ vite.config.js, tailwind.config.js, playwright.config.js, eslint.config.js, tsco
 ```bash
 npm install
 cp .env.example .env      # fill in VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
+```
+
+Before first run, apply `supabase/schema.sql` in your Supabase project's SQL editor, and disable **Authentication → Providers → Email → Confirm email** (see `supabase/README.md` for why).
+
+```bash
 npm run dev                # http://localhost:5173
 ```
+
+To bypass real auth for local UI work, set `VITE_DEMO_MODE=true` in `.env`
+and visit e.g. `http://localhost:5173/?demoRole=manager#/dashboard` —
+`?demoRole=manager` or `?demoRole=employee` signs you in as a hardcoded
+seeded user without touching Supabase. Never enabled in a real deployment
+unless you explicitly set that env var there.
 
 ## Checks
 
 ```bash
-npm run lint        # ESLint
-npm run typecheck   # tsc --noEmit (checkJs via JSDoc)
-npm test             # Vitest unit tests
-npm run e2e           # Playwright e2e tests (starts the dev server itself)
-npm run build           # production build (also generates the PWA manifest/SW)
+npm run lint              # ESLint
+npm run typecheck         # tsc --noEmit (checkJs via JSDoc)
+npm test                   # Vitest unit tests
+npm run e2e                 # Playwright e2e tests (starts the dev server itself)
+npm run build                 # production build (also generates the PWA manifest/SW)
+npm run test:integration        # RLS integration tests — needs SUPABASE_URL/SUPABASE_ANON_KEY/SUPABASE_SERVICE_ROLE_KEY
 ```
 
 Playwright note: this repo pins to whatever Chromium `npx playwright

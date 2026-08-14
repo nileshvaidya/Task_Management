@@ -2,6 +2,8 @@
 // modules, each exporting render(container). Kept decoupled from
 // window.location where possible so renderRoute() is unit-testable without
 // touching global browser state.
+import { getSessionUser } from './auth.js';
+
 export const routes = {
   '/login': () => import('./screens/login.js'),
   '/dashboard': () => import('./screens/dashboard.js'),
@@ -9,6 +11,7 @@ export const routes = {
   '/admin': () => import('./screens/admin.js'),
 };
 
+export const PROTECTED_ROUTES = new Set(['/dashboard', '/team', '/admin']);
 export const DEFAULT_ROUTE = '/login';
 
 export function normalizePath(hash) {
@@ -16,11 +19,22 @@ export function normalizePath(hash) {
   return path in routes ? path : DEFAULT_ROUTE;
 }
 
-export async function renderRoute(container, hash = window.location.hash) {
-  const path = normalizePath(hash);
+/**
+ * @param {HTMLElement} container
+ * @param {string} [hash]
+ * @param {() => Promise<unknown>} [sessionCheck] injectable for tests
+ */
+export async function renderRoute(container, hash = window.location.hash, sessionCheck = getSessionUser) {
+  let path = normalizePath(hash);
+
+  if (PROTECTED_ROUTES.has(path)) {
+    const user = await sessionCheck();
+    if (!user) path = DEFAULT_ROUTE;
+  }
+
   const mod = await routes[path]();
   container.innerHTML = '';
-  mod.render(container);
+  await mod.render(container);
   return path;
 }
 
