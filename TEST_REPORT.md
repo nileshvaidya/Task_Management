@@ -1,5 +1,47 @@
 # Test Report
 
+## Phase 4 — User Admin
+
+Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`. Integration: `npm run test:integration` (now also runs `scripts/test-rls-admin.mjs`). Edge Function: `supabase functions deploy admin-invite-user` must be run once (see `supabase/README.md`) before "Add User" works against a live project — not exercised by CI, only by the integration script's/e2e's mocked or real network calls.
+
+| # | Test case (from build brief §Phase 4) | Result | Notes |
+|---|---|---|---|
+| 1 | Non-manager (Employee) navigating to `#/admin` is redirected or shown an access-denied state | ✅ | `screens/admin.js` checks `profile.role !== 'manager'` and redirects to `#/dashboard` (unit-tested in `router.test.js`; e2e confirms via demo mode). The "User Admin" nav link is also hidden for non-managers (`layout.js`), so there's no dead link to begin with. |
+| 2 | Search filters the user table by name/email in real time | ✅ | `filterUsers()` unit-tested with fixture data (5 cases: empty query, name match, email match, multi-match, no-match). E2E types into the search box and confirms the table live-filters. |
+| 3 | "Add User" creates a real Supabase Auth invite + `users` row, not a local stub | ⏳ **Written, pending live run** | `supabase/functions/admin-invite-user` calls `auth.admin.inviteUserByEmail()` then inserts the `users` row, with a best-effort rollback (deletes the orphaned auth user) if the profile insert fails. Can't be exercised by CI (no Deno/Edge Function runtime there) or by a mocked e2e test in a way that proves the real invite email fires — validated by e2e against a mocked endpoint (request shape, dialog close-on-success, validation-blocks-invalid-submission) and will need one manual live check after this PR's `supabase functions deploy` step. |
+| 4 | Toggling Active/Inactive persists and immediately affects that user's ability to log in | ✅ | `set_user_status()` unit-tested via `admin.js`; integration script confirms the status persists in `public.users` and that an employee caller is rejected outright. Login-blocking itself was already covered end-to-end by Phase 1 test case 6 (`signIn` rejects an inactive profile) — soft-delete reuses the same `status='inactive'` field, so no new login-path code was needed. |
+| 5 | Deleting a user soft-deletes and reassigns/flags their open tasks rather than orphaning `owner_id` | ⏳ **Written, pending live run** | `scripts/test-rls-admin.mjs` — creates an open task and a completed task for the same employee, soft-deletes them, and asserts: `status='inactive'` + `deleted_at` set, the open task's `owner_id` moved to their manager, the completed task was left untouched (not reassigned), and the deleted user no longer appears in `admin_list_users()`. A second case covers deleting a *manager* (no manager of their own) — their open tasks fall back to the deleting admin instead. |
+| 6 | OVERRIDE lets a manager change any task's status/owner regardless of RLS ownership, via a manager-only server-side function | ⏳ **Written, pending live run** | `override_task()` is a `security definer` RPC, not a client-side RLS bypass, per the brief. Integration script has a manager override a *different team's* task (owner + status both changed in one call), confirms `blocked`/`blocked_reason` clear on completion (matching the normal status-change path's behavior), confirms an `overridden` activity-log entry was written, and confirms an employee caller is rejected outright. |
+
+### Additional Phase 4 coverage
+
+| Module | Tests | Result |
+|---|---|---|
+| `src/admin.js` (new) | 12 | ✅ |
+| `src/adminFilter.js` (new) | 5 | ✅ |
+| `validateAddUserForm` (`validation.js`, new) | 7 | ✅ |
+| Router role-guard for `/admin` (new case) | 1 | ✅ |
+| `e2e/phase4.spec.js` | 13 | ✅ |
+
+**Totals**: 148/148 Vitest unit tests passing (123 carried + 25 new) · 32/32 Playwright e2e tests passing (19 carried + 13 new) · lint clean · typecheck clean · production build succeeds.
+
+### Assumptions and open questions
+
+- **Admin scope is company-wide, not team-scoped** — a deliberate reading of "managers = admins" (brief §0) as elevated, cross-team privilege for the Admin screen specifically, unlike the team-scoped Dashboard/Team screens built in Phases 2-3. See `CHANGELOG.md` for the full reasoning; encoded directly in `schema.sql`'s Phase 4 RPCs (`is_active_manager()` gates on role alone, never on team membership).
+- **"Add User" requires a one-time Edge Function deployment** (`supabase functions deploy admin-invite-user`) that CI cannot perform and this environment has no credentials to run directly — same category of manual step as applying `schema.sql`, now with a second command. Documented in `supabase/README.md`.
+- **User name/email editing is out of scope** — none of the six brief test cases call for it; the prototype's "Edit" pencil icon was deliberately left out rather than shipped non-functional.
+- **A deleted manager's open tasks fall back to the deleting admin**, not a higher-level manager — there's no manager-of-managers concept until (if) Phase 7 adds one.
+
+### Bugs found and fixed during verification
+
+No application-code bugs surfaced during this phase's own verification. The two RLS-adjacent mistakes that a naive Phase 4 implementation could have repeated — a team-scoped-by-accident policy, and an RLS-widening approach that leaks data outside the Admin screen — were both learned the hard way in Phase 3 (see that phase's entries below) and designed around proactively here (company-wide access lives only in narrowly-gated RPCs, never in a broadened RLS policy on `users`/`tasks` themselves), rather than caught after the fact.
+
+### Known items carried forward (not blockers for Phase 4 sign-off)
+
+- **RPC integration tests are unrun locally** (no live Supabase credentials in this environment, by design); `scripts/test-rls-admin.mjs` is written, syntax-checked, and wired into `npm run test:integration` / CI, same gate as the Phase 1-3 scripts.
+- **The Edge Function itself needs a one-time live deploy** before "Add User" works end-to-end in production — not something this PR's automated tests can perform or verify.
+- Carried from Phase 0-3: `npm audit` dev-tooling advisories (deferred, breaking Vite major bump).
+
 ## Phase 3 — Team Feed & Team Overview
 
 Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`. Integration: `npm run test:integration` (now runs the Phase 1 users script, the Phase 2 tasks script, and the new team script).

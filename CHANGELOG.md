@@ -1,5 +1,30 @@
 # Changelog
 
+## Phase 4 — User Admin
+
+- `users.deleted_at` column + five security-definer RPCs (`supabase/schema.sql`): `is_active_manager()`, `admin_list_users()`, `admin_list_tasks()`, `set_user_status()`, `soft_delete_user()`, `override_task()`. Deliberately **company-wide**, not team-scoped like Phases 2-3 — "managers = admins" (brief §0) is read here as "any active manager administers the whole company," the one intentional exception to the team-scoping principle built up through Phase 3. Kept out of RLS (which would've widened every other query too) and instead gated per-RPC, so the elevated access only ever applies to an explicit admin action.
+- `soft_delete_user()` reassigns the deleted user's *open* (not-completed) tasks to their manager for triage, per the brief; a deleted manager's tasks fall back to whichever admin performed the delete, since there's no manager-of-managers concept yet to reassign to instead.
+- `override_task()` bypasses the normal ownership rules unconditionally (status and/or owner), logs a new `overridden` activity-log verb, and clears `blocked`/`blocked_reason` when overriding to `completed` — same behavior as the normal status-change path.
+- `supabase/functions/admin-invite-user` (new Supabase Edge Function): the one admin action needing the Auth Admin API (`auth.admin.inviteUserByEmail`), which only works with the service-role key and so can't be a client-side RPC like the others. Requires a one-time `supabase functions deploy admin-invite-user` — documented in `supabase/README.md`.
+- `src/admin.js` (new data layer): `fetchAdminUsers`/`fetchAdminTasks`/`inviteUser`/`setUserStatus`/`softDeleteUser`/`overrideTask`.
+- `src/adminFilter.js` (new): pure `filterUsers()` for the User Management search box.
+- Full Admin screen (`src/screens/admin.js`): User Management table (search, Add User, toggle active/inactive, soft-delete with inline confirm) + Global Task Control table (inline OVERRIDE editor: status + owner selects). Restricted to Manager role (Phase 4 test case 1) — a non-manager visiting `#/admin` is redirected to the Dashboard instead of shown the screen, and the "User Admin" nav link itself is hidden for non-managers (`layout.js`).
+- `src/dialogs/addUserDialog.js` (new): mirrors `newTaskDialog.js`'s shape — mounts into `#dialog-root`, dispatches a `worksync:user-invited` window event on success. New `validateAddUserForm` (`validation.js`) — same shape as `validateSignupForm` minus the password field, since this is an invite flow, not a self-chosen password.
+- `scripts/test-rls-admin.mjs` (new): integration tests for all five RPCs — confirms both halves of the company-wide design (any manager acts across teams; a non-manager is rejected by every one of them) — added to `npm run test:integration` alongside the Phase 1-3 scripts.
+- Vitest coverage: `admin.js` (12), `adminFilter.js` (5), `validateAddUserForm` (7 new), router role-guard (1 new) — 148/148 total.
+- Playwright coverage (`e2e/phase4.spec.js`, 13 tests): employee redirected from `#/admin`; User Management renders/searches/toggles/deletes (with inline confirm); Add User dialog validation and a full successful invite; Global Task Control's inline OVERRIDE editor (apply and cancel).
+
+### Assumptions
+
+- **Admin scope is company-wide, not team-scoped.** The brief's Phase 4 text doesn't repeat Phase 3's explicit "scoped to own team" caveat, and the original design prototype showed one global admin panel — read together with "managers = admins" (brief §0), the more faithful interpretation is that the Admin screen is deliberately the one elevated-privilege surface where a manager's reach extends beyond their own team. Documented in `supabase/schema.sql` at the point every Phase 4 RPC is defined.
+- **"Add User" via Edge Function**, chosen over a client-side temp-password workaround, to match the brief's literal "creates a real Supabase Auth invite" requirement. Means a one-time `supabase functions deploy` step is needed before Add User works live (see `supabase/README.md`); every other Phase 4 action is a plain Postgres RPC with no separate deployment step.
+- **Editing an existing user's name/email is out of scope for Phase 4** — none of the brief's six test cases call for it, and it's a materially different (and Auth-email-change-adjacent) problem from toggle/delete/override. Left out rather than shipped as a non-functional placeholder button.
+- **Deleting a manager reassigns their open tasks to the acting admin**, not to a higher-level manager — there's no manager-of-managers concept yet (that's Phase 7's "true multi-level org hierarchy" future item). Documented inline in `schema.sql`'s `soft_delete_user()`.
+
+### Bugs found and fixed during verification
+
+- No application-code bugs surfaced during this phase's own verification (unlike Phases 1-3, which each caught a real runtime bug via browser/e2e testing) — the two RLS-adjacent traps that Phase 4's design could have repeated (a naive team-scoped policy, and an unfiltered company-wide leak) were both avoided by design, having already been learned the hard way in Phase 3 (see that phase's entries below) and applied proactively here instead of discovered after the fact.
+
 ## Phase 3 — Team Feed & Team Overview
 
 - `activity_log` table + RLS (`supabase/schema.sql`): logs `created`/`status_changed` events (`accepted`/`blocked`/`unblocked` reserved for Phase 5). New `team_root(uid)` and `team_member_ids(uid)` `security definer` SQL functions define "team" (a manager + their direct reports) once, shared by the `activity_log`, `tasks`, and `users` team-scoping policies below.

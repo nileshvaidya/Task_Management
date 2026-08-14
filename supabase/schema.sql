@@ -297,3 +297,204 @@ create policy "Users can log their own activity"
   on public.activity_log for insert
   to authenticated
   with check (actor_id = auth.uid());
+
+-- Phase 4: User Admin. "Managers = admins" (brief §0) — unlike the
+-- deliberately team-scoped Dashboard/Team screens (Phases 2-3), the Admin
+-- screen is the one surface where a manager's privilege is company-wide:
+-- any active manager can list/manage every user and every task, not just
+-- their own team. Kept out of RLS (which would broaden every other query
+-- too) and instead gated per-action through these security definer RPCs,
+-- so the elevated access only ever applies to an explicit admin action.
+
+alter table public.users add column if not exists deleted_at timestamptz null;
+
+create or replace function public.is_active_manager(uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.users
+    where id = uid and role = 'manager' and status = 'active' and deleted_at is null
+  );
+$$;
+
+grant execute on function public.is_active_manager(uuid) to authenticated;
+
+-- Every user, for the User Management table. Excludes soft-deleted users —
+-- "deleted" means gone from the admin view, not merely deactivated (that's
+-- what the separate Active/Inactive toggle is for).
+create or replace function public.admin_list_users()
+returns setof public.users
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select * from public.users
+  where public.is_active_manager(auth.uid()) and deleted_at is null
+  order by name;
+$$;
+
+grant execute on function public.admin_list_users() to authenticated;
+
+-- Every task, for the Global Task Control table.
+create or replace function public.admin_list_tasks()
+returns setof public.tasks
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select * from public.tasks
+  where public.is_active_manager(auth.uid())
+  order by due_date;
+$$;
+
+grant execute on function public.admin_list_tasks() to authenticated;
+
+-- Toggle Active/Inactive (Phase 4 test case 4). A narrow RPC rather than a
+-- general UPDATE policy, same rationale as touch_last_active() in Phase 1 —
+-- this is the only door through which status can change, so it's the only
+-- place that needs to enforce "caller is a manager" and "not targeting
+-- yourself" (an admin locking themselves out is never intended).
+create or replace function public.set_user_status(target_id uuid, new_status text)
+returns public.users
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated public.users;
+begin
+  if not public.is_active_manager(auth.uid()) then
+    raise exception 'Only an active manager can change a user''s status.';
+  end if;
+  if target_id = auth.uid() then
+    raise exception 'You cannot change your own status.';
+  end if;
+  if new_status not in ('active', 'inactive') then
+    raise exception 'Invalid status: %', new_status;
+  end if;
+
+  update public.users set status = new_status where id = target_id and deleted_at is null
+  returning * into updated;
+
+  if updated.id is null then
+    raise exception 'User not found.';
+  end if;
+  return updated;
+end;
+$$;
+
+grant execute on function public.set_user_status(uuid, text) to authenticated;
+
+-- Soft-delete (Phase 4 test case 5): marks the user inactive + deleted, and
+-- reassigns their open (not-yet-completed) tasks rather than orphaning
+-- owner_id. Reassignment target is their manager, for triage — the natural
+-- reading of "tasks move to the deleted user's manager". A deleted
+-- *manager* has no manager to fall back to, so their open tasks go to
+-- whichever admin performed the delete instead (documented assumption —
+-- there's no companywide "manager of managers" concept yet).
+create or replace function public.soft_delete_user(target_id uuid)
+returns public.users
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated public.users;
+  target_manager_id uuid;
+  reassign_to uuid;
+begin
+  if not public.is_active_manager(auth.uid()) then
+    raise exception 'Only an active manager can delete a user.';
+  end if;
+  if target_id = auth.uid() then
+    raise exception 'You cannot delete your own account.';
+  end if;
+
+  select manager_id into target_manager_id from public.users where id = target_id;
+  reassign_to := coalesce(target_manager_id, auth.uid());
+
+  update public.tasks set owner_id = reassign_to
+  where owner_id = target_id and status <> 'completed';
+
+  update public.users set status = 'inactive', deleted_at = now()
+  where id = target_id
+  returning * into updated;
+
+  if updated.id is null then
+    raise exception 'User not found.';
+  end if;
+  return updated;
+end;
+$$;
+
+grant execute on function public.soft_delete_user(uuid) to authenticated;
+
+-- OVERRIDE (Phase 4 test case 6): lets a manager change any task's status
+-- and/or owner regardless of the ownership rules RLS otherwise enforces —
+-- implemented as this server-side function rather than a client-side RLS
+-- bypass, per the brief. new_owner_id is optional (null = leave owner_id
+-- unchanged, just change status).
+create or replace function public.override_task(task_id uuid, new_status text, new_owner_id uuid default null)
+returns public.tasks
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  updated public.tasks;
+  old_title text;
+begin
+  if not public.is_active_manager(auth.uid()) then
+    raise exception 'Only an active manager can override a task.';
+  end if;
+  if new_status not in ('planned', 'in-progress', 'completed') then
+    raise exception 'Invalid status: %', new_status;
+  end if;
+
+  select title into old_title from public.tasks where id = task_id;
+  if old_title is null then
+    raise exception 'Task not found.';
+  end if;
+
+  update public.tasks
+  set status = new_status,
+      owner_id = coalesce(new_owner_id, owner_id),
+      blocked = case when new_status = 'completed' then false else blocked end,
+      blocked_reason = case when new_status = 'completed' then null else blocked_reason end
+  where id = task_id
+  returning * into updated;
+
+  insert into public.activity_log (actor_id, verb, task_id, detail)
+  values (auth.uid(), 'overridden', task_id, old_title || ' → ' || new_status);
+
+  return updated;
+end;
+$$;
+
+grant execute on function public.override_task(uuid, text, uuid) to authenticated;
+
+-- Allow the new 'overridden' verb — the original inline check constraint
+-- (auto-named by Postgres) is replaced with an explicitly-named one so this
+-- migration is idempotent on re-run.
+do $$
+declare
+  c record;
+begin
+  for c in
+    select con.conname
+    from pg_constraint con
+    join pg_class rel on rel.oid = con.conrelid
+    where rel.relname = 'activity_log' and con.contype = 'c' and pg_get_constraintdef(con.oid) ilike '%verb%'
+  loop
+    execute format('alter table public.activity_log drop constraint %I', c.conname);
+  end loop;
+
+  alter table public.activity_log add constraint activity_log_verb_check
+    check (verb in ('created', 'status_changed', 'accepted', 'blocked', 'unblocked', 'overridden'));
+end $$;
