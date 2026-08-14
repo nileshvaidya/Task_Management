@@ -1,5 +1,23 @@
 # Changelog
 
+## Phase 2 — Task CRUD & Dashboard
+
+- `tasks` (+ `projects`) tables + RLS (`supabase/schema.sql`): owner full CRUD on their own tasks; manager can view/update (not delete) their direct reports' tasks — the Dashboard's "My Team" filter. Full data-model contract (dependency/acceptance columns) created now so the shape is stable for Phase 5, but only owner/manager CRUD is wired up yet.
+- Shared app shell (`src/layout.js`): desktop sidebar / mobile top bar + bottom tabs, both in the same DOM tree, switched purely by Tailwind responsive classes (`hidden md:flex` / `md:hidden`) — no JS device-state branching, per the brief. Wired into dashboard/team/admin so nav + identity are consistent everywhere.
+- Full Dashboard screen (`src/screens/dashboard.js`): Plan Today quick-add, Active Tasks (All/Pending filter, round completion toggle, status select, blocked line), Weekly Progress card (real completed/total for the current week), Advance Planning mini calendar (real month navigation, today highlighted), and a My Team / Mine toggle for managers.
+- Real New Task dialog (`src/dialogs/newTaskDialog.js`): title/description/date, always self-owned in this phase (Project/Priority/Assign To/Dependencies are Phase 5's "full New Task dialog"). Rejects a past date or empty title via `validateNewTaskForm`.
+- `src/tasks.js`: `fetchMyTasks`/`fetchTeamTasks`/`createTask`/`setTaskStatus`/`toggleTaskDone` — completing a task always clears `blocked`/`blocked_reason`.
+- `src/dateUtils.js` / `src/taskStats.js`: pure date and weekly-progress-calculation helpers, unit-tested directly.
+- `scripts/test-rls-tasks.mjs`: RLS integration tests for the `tasks` table (owner CRUD, manager sees/updates but can't delete reports' tasks, cross-team access blocked both ways), added to `npm run test:integration` alongside the Phase 1 users script.
+- Vitest coverage: `dateUtils` (11), `taskStats`/weekly progress (3), `tasks.js` with a mocked client (10), `renderTaskRow` (7 new), `validateNewTaskForm` (5 new) — 89/89 total.
+- Playwright coverage: Dashboard smoke test (all four cards render, no console errors), manager-only My Team filter, real-CSS-breakpoint responsive layout (mobile bottom tabs vs desktop sidebar), New Task dialog validation (past date, empty title) and cancel.
+
+### Bugs found and fixed during verification
+
+1. **The exact same backtick-in-template-literal mistake as Phase 1, reintroduced.** A code comment inside `newTaskDialog.js`'s template literal used backticks around the word `min`, terminating the string early and throwing a real syntax error that silently broke the New Task dialog (and, transitively, the whole Dashboard, since the dialog module is imported by the shell). Caught the same way as before — loading the actual page in a browser and reading `pageerror` events, not by lint/typecheck. Grepped the full `src/` tree afterward for every other backtick to confirm no other instance of this pattern existed.
+2. **Native HTML5 constraint validation silently swallowed form submission.** The New Task dialog's date input has a `min` attribute (today); setting it to a past value via any path other than the native picker leaves the field in a browser-invalid state, and clicking submit never even fires the `submit` event — no custom error, no native message either, just nothing. Fixed by adding `novalidate` to the form so the app's own `validateNewTaskForm` always runs and shows its own message, which is what the brief specifically asked for.
+3. **Playwright test route-pattern collision.** An e2e test's Supabase mock for "task creation" matched the same URL pattern as the Dashboard's own background task-list fetch, so an unrelated GET was counted as the create call, masking a `insertCalled` false positive. Fixed by branching on HTTP method inside the route handler.
+
 ## Phase 1 — Auth, Users & Roles
 
 - `users` table + RLS (`supabase/schema.sql`): role/manager_id pairing enforced by a CHECK constraint, own-row + manager-sees-reports + public-active-managers-directory + insert-own-row policies, and a `touch_last_active()` RPC instead of a broad UPDATE policy.

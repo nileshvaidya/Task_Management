@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateSignupForm, validateSigninForm } from './validation.js';
+import { validateSignupForm, validateSigninForm, validateNewTaskForm } from './validation.js';
 
 describe('validateSignupForm', () => {
   const base = { name: 'David Chen', email: 'd.chen@company.com', password: 'secret1' };
@@ -56,5 +56,35 @@ describe('validateSigninForm', () => {
     expect(validateSigninForm({}).valid).toBe(false);
     expect(validateSigninForm({ email: 'a@b.com' }).valid).toBe(false);
     expect(validateSigninForm({ email: 'a@b.com', password: 'x' }).valid).toBe(true);
+  });
+});
+
+describe('validateNewTaskForm', () => {
+  const today = '2026-08-14';
+
+  it('requires a title', () => {
+    const { valid, errors } = validateNewTaskForm({ title: '  ', dueDate: today }, today);
+    expect(valid).toBe(false);
+    expect(errors.title).toBeDefined();
+  });
+
+  it('requires a date', () => {
+    const { valid, errors } = validateNewTaskForm({ title: 'Write report', dueDate: '' }, today);
+    expect(valid).toBe(false);
+    expect(errors.dueDate).toBeDefined();
+  });
+
+  it('rejects a past date', () => {
+    const { valid, errors } = validateNewTaskForm({ title: 'Write report', dueDate: '2026-08-13' }, today);
+    expect(valid).toBe(false);
+    expect(errors.dueDate).toMatch(/past/i);
+  });
+
+  it('accepts today', () => {
+    expect(validateNewTaskForm({ title: 'Write report', dueDate: today }, today).valid).toBe(true);
+  });
+
+  it('accepts a future date', () => {
+    expect(validateNewTaskForm({ title: 'Write report', dueDate: '2026-09-01' }, today).valid).toBe(true);
   });
 });
