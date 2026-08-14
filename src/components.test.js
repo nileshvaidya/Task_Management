@@ -1,6 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { getByText } from '@testing-library/dom';
-import { escapeHtml, initials, renderIdentityBlock, renderTaskRow } from './components.js';
+import {
+  escapeHtml,
+  initials,
+  renderIdentityBlock,
+  renderTaskRow,
+  renderActivityCard,
+  renderMemberCard,
+} from './components.js';
 
 describe('escapeHtml', () => {
   it('escapes HTML-significant characters', () => {
@@ -110,5 +117,90 @@ describe('renderTaskRow', () => {
   it('escapes HTML in the title', () => {
     const el = mount({ ...baseTask, title: '<img src=x onerror=alert(1)>' });
     expect(el.querySelector('img')).toBeNull();
+  });
+});
+
+describe('renderActivityCard', () => {
+  function mount(entry) {
+    const el = document.createElement('div');
+    el.innerHTML = renderActivityCard(entry);
+    return el;
+  }
+
+  it('renders the actor name, verb text, and detail', () => {
+    const el = mount({
+      actor: { name: 'Sarah Jenkins' },
+      verb: 'created',
+      detail: 'Write report',
+      created_at: new Date().toISOString(),
+    });
+    expect(getByText(el, /Sarah Jenkins/)).toBeTruthy();
+    expect(getByText(el, /created a task/)).toBeTruthy();
+    expect(getByText(el, 'Write report')).toBeTruthy();
+    expect(getByText(el, 'Created')).toBeTruthy();
+  });
+
+  it('falls back to "Someone" when the actor is missing', () => {
+    const el = mount({ actor: null, verb: 'created', detail: 'x', created_at: new Date().toISOString() });
+    expect(getByText(el, /Someone/)).toBeTruthy();
+  });
+
+  it('shows the Status Update tag for a status_changed entry', () => {
+    const el = mount({
+      actor: { name: 'David Chen' },
+      verb: 'status_changed',
+      detail: 'Write report → completed',
+      created_at: new Date().toISOString(),
+    });
+    expect(getByText(el, 'Status Update')).toBeTruthy();
+  });
+
+  it('escapes HTML in the actor name and detail', () => {
+    const el = mount({
+      actor: { name: '<b>Evil</b>' },
+      verb: 'created',
+      detail: '<img src=x onerror=alert(1)>',
+      created_at: new Date().toISOString(),
+    });
+    expect(el.querySelector('img')).toBeNull();
+    expect(el.querySelector('b')).toBeNull();
+  });
+});
+
+describe('renderMemberCard', () => {
+  const member = { id: 'u1', name: 'Sarah Jenkins', role: 'manager', status: 'active' };
+
+  function mount(m, focus) {
+    const el = document.createElement('div');
+    el.innerHTML = renderMemberCard(m, focus);
+    return el;
+  }
+
+  it('renders the member name, role label, and status tag', () => {
+    const el = mount(member, []);
+    expect(getByText(el, 'Sarah Jenkins')).toBeTruthy();
+    expect(getByText(el, 'Manager')).toBeTruthy();
+    expect(getByText(el, 'Active')).toBeTruthy();
+  });
+
+  it("shows each focus item, striking through completed ones", () => {
+    const el = mount(member, [
+      { id: 't1', title: 'Not done yet', done: false },
+      { id: 't2', title: 'Already done', done: true },
+    ]);
+    const notDone = getByText(el, 'Not done yet');
+    const done = getByText(el, 'Already done');
+    expect(notDone.getAttribute('style')).not.toMatch(/line-through/);
+    expect(done.getAttribute('style')).toMatch(/line-through/);
+  });
+
+  it('shows a placeholder when nothing is due today', () => {
+    const el = mount(member, []);
+    expect(getByText(el, /Nothing due today/)).toBeTruthy();
+  });
+
+  it('labels an employee correctly', () => {
+    const el = mount({ ...member, role: 'employee' }, []);
+    expect(getByText(el, 'Employee')).toBeTruthy();
   });
 });

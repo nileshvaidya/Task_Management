@@ -1,5 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { todayISODate, isPastDate, weekRange, isInRange, formatDueLabel, buildCalendarCells } from './dateUtils.js';
+import {
+  todayISODate,
+  isPastDate,
+  weekRange,
+  isInRange,
+  formatDueLabel,
+  buildCalendarCells,
+  formatRelativeTime,
+} from './dateUtils.js';
 
 describe('todayISODate', () => {
   it('formats a Date as YYYY-MM-DD', () => {
@@ -53,6 +61,30 @@ describe('formatDueLabel', () => {
 
   it('formats other dates as month + day', () => {
     expect(formatDueLabel('2026-08-20', '2026-08-14')).toBe('Due Aug 20');
+  });
+});
+
+describe('formatRelativeTime', () => {
+  const now = new Date('2026-08-14T12:00:00Z');
+
+  it('shows "just now" for under a minute', () => {
+    expect(formatRelativeTime('2026-08-14T11:59:30Z', now)).toBe('just now');
+  });
+
+  it('shows minutes ago for under an hour', () => {
+    expect(formatRelativeTime('2026-08-14T11:45:00Z', now)).toBe('15m ago');
+  });
+
+  it('shows hours ago for under a day', () => {
+    expect(formatRelativeTime('2026-08-14T09:00:00Z', now)).toBe('3h ago');
+  });
+
+  it('shows days ago for under a week', () => {
+    expect(formatRelativeTime('2026-08-12T12:00:00Z', now)).toBe('2d ago');
+  });
+
+  it('falls back to a calendar date at a week or older', () => {
+    expect(formatRelativeTime('2026-08-01T12:00:00Z', now)).toBe('Aug 1');
   });
 });
 
