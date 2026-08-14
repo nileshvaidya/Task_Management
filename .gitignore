@@ -1,7 +1,9 @@
 node_modules/
 .env
 .env.local
-public/css/styles.css
-public/js/config.js
-public/js/vendor/
+dist/
+dev-dist/
 .vercel
+playwright-report/
+test-results/
+coverage/
