@@ -53,6 +53,25 @@ export function buildCalendarCells(year, month, today = todayISODate()) {
   return cells;
 }
 
+/**
+ * "just now" / "12m ago" / "3h ago" / "2d ago" — the Activity Feed's
+ * timestamp label. Falls back to a calendar date once it's more than a
+ * week old rather than growing an ever-larger day count.
+ * @param {string} isoTimestamp
+ * @param {Date} [now]
+ */
+export function formatRelativeTime(isoTimestamp, now = new Date()) {
+  const then = new Date(isoTimestamp);
+  const minutes = Math.floor((now.getTime() - then.getTime()) / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return then.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 /** "Due today" / "Due tomorrow" / "Due Aug 20" relative to `today`. */
 export function formatDueLabel(dateStr, today = todayISODate()) {
   if (dateStr === today) return 'Due today';

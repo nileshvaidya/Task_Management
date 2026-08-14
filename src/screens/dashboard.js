@@ -187,7 +187,7 @@ function wireEvents(content, store, user, loadTasks) {
       const id = btn.getAttribute('data-task-id');
       const task = store.getState().tasks.find((t) => String(t.id) === id);
       if (!task) return;
-      await toggleTaskDone(task);
+      await toggleTaskDone(task, user.id);
       await loadTasks();
     });
   });
@@ -195,7 +195,7 @@ function wireEvents(content, store, user, loadTasks) {
   content.querySelectorAll('[data-action="status-select"]').forEach((select) => {
     select.addEventListener('change', async () => {
       const id = select.getAttribute('data-task-id');
-      await setTaskStatus(id, select.value);
+      await setTaskStatus(id, select.value, user.id);
       await loadTasks();
     });
   });

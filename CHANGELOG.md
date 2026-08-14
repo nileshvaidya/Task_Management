@@ -1,5 +1,31 @@
 # Changelog
 
+## Phase 3 — Team Feed & Team Overview
+
+- `activity_log` table + RLS (`supabase/schema.sql`): logs `created`/`status_changed` events (`accepted`/`blocked`/`unblocked` reserved for Phase 5). New `team_root(uid)` and `team_member_ids(uid)` `security definer` SQL functions define "team" (a manager + their direct reports) once, shared by the `activity_log`, `tasks`, and `users` team-scoping policies below.
+- New SELECT-only RLS policies: "Team can view team tasks" (`tasks`) and "Team can view teammate profiles" (`users`) — let a teammate (not just a manager) view, but never modify, the rest of their team's tasks/profiles, needed for Team Overview to work for an employee viewer, not only a manager.
+- `src/activity.js` (new): `logActivity()`/`fetchTeamActivity()`. Wired into `src/tasks.js` — `createTask` now logs a `created` entry, `setTaskStatus`/`toggleTaskDone` log a `status_changed` entry when given the acting user's id (both `dashboard.js` call sites updated).
+- `src/teamStats.js` (new): `computeTeamPulse`/`computeBlockers`/`computeTodaysFocus` — pure calculations over a team's task list, unit-tested against fixture data.
+- `src/users.js` (new): `fetchTeamMembers()` — team-scoped user profiles via the `team_member_ids` RPC, not a bare `select *` (see "Bugs found" in `TEST_REPORT.md` for why that distinction matters).
+- `src/tasks.js`: `fetchAllTeamTasks()` — every task owned by anyone on the caller's team (self + manager + siblings), for Team Overview's aggregate cards; distinct from the existing manager-only `fetchTeamTasks` (Dashboard's "My Team" filter).
+- Full Team screen (`src/screens/team.js`): Activity Feed tab (team activity, newest first) and Team Overview tab (Team Pulse card, Blockers & Alerts card, per-member Today's Focus cards), tab switch via the existing `.seg` radio pattern — plain JS show/hide, no framework routing within the screen.
+- `renderActivityCard`/`renderMemberCard` (`components.js`, new): Nocturne-styled render helpers, unit-tested in isolation via `@testing-library/dom`, matching `renderTaskRow`'s existing pattern.
+- `formatRelativeTime` (`dateUtils.js`, new): "just now" / "12m ago" / "3h ago" / calendar-date fallback for the Activity Feed's timestamps.
+- `scripts/test-rls-team.mjs` (new): RLS integration tests for the team-scoping policies above (two full teams, symmetric manager/employee visibility, cross-team negative cases), added to `npm run test:integration` alongside the Phase 1/2 scripts.
+- Vitest coverage: `teamStats` (7), `activity.js` (5), `users.js` (3), `tasks.js` (6 new), `renderActivityCard`/`renderMemberCard` (8 new), `formatRelativeTime` (5 new) — 123/123 total.
+- Playwright coverage: Activity Feed renders team activity with no console errors, empty-state fallback, Team Overview's three cards render from fixture data, and creating a task posts both the task insert and its `activity_log` entry.
+
+### Assumptions
+
+- Left the design reference's "Sprint Progress" sidebar out of the Activity Feed tab — Phase 3's own build/test-case list doesn't call for it, and the data model has no "sprint" concept to map it onto (only flat `projects`). See `TEST_REPORT.md` for the full reasoning.
+- "Team" = a manager plus their direct reports, symmetric for whichever member is looking — the natural reading of the brief given the current flat manager→report hierarchy (no manager-of-managers yet).
+
+### Bugs found and fixed during verification
+
+1. **A copy-pasted RLS pattern would have silently broken Team Overview for employees.** A naive "team tasks" policy modeled on Phase 2's manager-only policy relies on a nested `users` subquery that runs under the *querying* user's own RLS — which Phase 1 never granted employees visibility into siblings' rows through, so an employee's version of the same query would return nothing. Fixed by computing team membership through a `security definer` function (`team_member_ids()`) instead. Caught during schema design, before it could reach a live project — see `TEST_REPORT.md` for the full account and how `scripts/test-rls-team.mjs` verifies both a manager and an employee caller get the same team-scoped result.
+2. **A related trap**: even with that function in place, an unfiltered `select * from users` for "my team" would still leak every other manager company-wide, because Phase 1's "public can view active managers" policy (needed for the sign-up picker) is a separate, broader grant that ORs together with any new policy. `fetchTeamMembers`/`fetchAllTeamTasks` explicitly filter by the `team_member_ids` RPC result rather than trusting "whatever RLS lets through."
+3. **Playwright mock shape mismatch during e2e authoring** (test bug, not an app bug): mocking `.select().single()` responses as `[{...}]` instead of a bare `{...}` object silently nulled out a field client-side. Fixed to match the object-shape convention already used by the Phase 2 e2e mocks.
+
 ## Deployment fix (post-Phase-2, found in production)
 
 After merging Phase 2, the live app returned `404: NOT_FOUND` on every route, then (once that was fixed) `Supabase is not configured` on sign-up. Neither was catchable from CI/local — both only manifest against the real Vercel project's dashboard state.

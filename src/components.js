@@ -1,5 +1,5 @@
 // Shared render helpers used across screen modules.
-import { formatDueLabel } from './dateUtils.js';
+import { formatDueLabel, formatRelativeTime } from './dateUtils.js';
 
 export function escapeHtml(value) {
   const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -57,6 +57,71 @@ export function renderTaskRow(task) {
         </select>
         <span class="tag ${tagClass}">${statusLabel}</span>
       </div>
+    </div>`;
+}
+
+const VERB_META = {
+  created: { text: 'created a task', tagLabel: 'Created', tagClass: 'tag-accent' },
+  status_changed: { text: 'updated a task', tagLabel: 'Status Update', tagClass: 'tag-neutral' },
+  accepted: { text: 'accepted a task', tagLabel: 'Accepted', tagClass: 'tag-accent-2' },
+  blocked: { text: 'flagged a blocker', tagLabel: 'Blocker', tagClass: 'tag-outline' },
+  unblocked: { text: 'cleared a blocker', tagLabel: 'Unblocked', tagClass: 'tag-accent' },
+};
+
+/**
+ * A single Team Feed activity card: actor initials, "<name> <verb text>",
+ * relative timestamp, detail line, and a verb-colored tag.
+ * @param {{ actor?: { name: string }|null, verb: string, detail: string|null, created_at: string }} entry
+ */
+export function renderActivityCard(entry) {
+  const meta = VERB_META[entry.verb] || { text: entry.verb, tagLabel: entry.verb, tagClass: 'tag-neutral' };
+  const who = entry.actor?.name || 'Someone';
+  return `
+    <div class="card elev-sm" style="padding:18px">
+      <div style="display:flex;align-items:flex-start;gap:12px">
+        <div style="width:36px;height:36px;border-radius:50%;background:var(--color-neutral-800);color:var(--color-neutral-200);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex:none">${escapeHtml(initials(who))}</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <div style="font-size:14px"><strong>${escapeHtml(who)}</strong> ${escapeHtml(meta.text)}</div>
+            <span style="font-size:12px;color:var(--color-neutral-500);flex:none">${escapeHtml(formatRelativeTime(entry.created_at))}</span>
+          </div>
+          <p style="font-size:13px;color:var(--color-neutral-400);margin:6px 0 8px">${escapeHtml(entry.detail || '')}</p>
+          <span class="tag ${meta.tagClass}">${meta.tagLabel}</span>
+        </div>
+      </div>
+    </div>`;
+}
+
+/**
+ * Team Overview's per-member card: identity + status tag + "Today's Focus"
+ * checklist (struck through for completed tasks).
+ * @param {{ id: string, name: string, role: string, status: string }} member
+ * @param {Array<{ id: string, title: string, done: boolean }>} focusItems
+ */
+export function renderMemberCard(member, focusItems) {
+  return `
+    <div class="card elev-sm" style="padding:18px" data-member-card="${escapeHtml(member.id)}">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="width:34px;height:34px;border-radius:50%;background:var(--color-neutral-800);color:var(--color-neutral-200);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">${escapeHtml(initials(member.name))}</div>
+          <div>
+            <div style="font-size:14px;font-weight:500">${escapeHtml(member.name)}</div>
+            <div style="font-size:12px;color:var(--color-neutral-500)">${member.role === 'manager' ? 'Manager' : 'Employee'}</div>
+          </div>
+        </div>
+        <span class="tag tag-neutral">${member.status === 'active' ? 'Active' : 'Inactive'}</span>
+      </div>
+      <div style="font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--color-neutral-500);margin-bottom:6px">Today's Focus</div>
+      ${
+        focusItems.length === 0
+          ? `<div style="font-size:13px;color:var(--color-neutral-500);padding:3px 0">Nothing due today.</div>`
+          : focusItems
+              .map(
+                (f) =>
+                  `<div style="font-size:13px;padding:3px 0;${f.done ? 'text-decoration:line-through;color:var(--color-neutral-500)' : ''}">${escapeHtml(f.title)}</div>`
+              )
+              .join('')
+      }
     </div>`;
 }
 

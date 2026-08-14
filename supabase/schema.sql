@@ -208,3 +208,92 @@ create policy "Managers can update reports' tasks"
   with check (
     owner_id in (select id from public.users where manager_id = auth.uid())
   );
+
+-- Phase 3: Team Feed & Team Overview. "Team" = a manager plus their direct
+-- reports. team_root(uid) resolves any user to the manager id that anchors
+-- their team (themselves, if they're a manager) so both a manager's and an
+-- employee's team-scoped queries can share one definition.
+create or replace function public.team_root(uid uuid)
+returns uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select case when u.role = 'manager' then u.id else u.manager_id end
+  from public.users u
+  where u.id = uid;
+$$;
+
+grant execute on function public.team_root(uuid) to authenticated;
+
+-- team_member_ids must also be security definer: a plain subquery on
+-- public.users inside a policy's USING clause runs under the *querying*
+-- user's own RLS, not the definer's — so an employee (who Phase 1 only
+-- grants "own row" + "public active managers" visibility on public.users)
+-- would see an empty result for siblings under the same manager, breaking
+-- Team Overview for employees specifically. Wrapping the lookup in a
+-- security definer function bypasses that inner RLS, scoped only to
+-- "who shares my team_root" — it can't be used to browse arbitrary users.
+create or replace function public.team_member_ids(uid uuid)
+returns setof uuid
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select id from public.users where coalesce(manager_id, id) = public.team_root(uid);
+$$;
+
+grant execute on function public.team_member_ids(uuid) to authenticated;
+
+-- Team Overview's per-member cards need each teammate's name/role/status —
+-- same team_member_ids scoping as the tasks/activity_log policies below.
+-- SELECT-only; the Phase 1 "own row" insert policy is unaffected, and there
+-- is still no general UPDATE policy (role/status changes stay Admin-only).
+drop policy if exists "Team can view teammate profiles" on public.users;
+create policy "Team can view teammate profiles"
+  on public.users for select
+  to authenticated
+  using (id in (select public.team_member_ids(auth.uid())));
+
+-- Team Overview needs to read teammates' tasks to compute Team Pulse,
+-- Blockers & Alerts, and per-member Today's Focus — including for an
+-- employee viewing siblings under the same manager, which the Phase 2
+-- owner/manager-of-owner policies don't cover. This is SELECT-only: the
+-- existing owner/manager policies above remain the only way to insert,
+-- update, or delete a task, so a teammate can view but never modify
+-- another teammate's task through this policy.
+drop policy if exists "Team can view team tasks" on public.tasks;
+create policy "Team can view team tasks"
+  on public.tasks for select
+  to authenticated
+  using (owner_id in (select public.team_member_ids(auth.uid())));
+
+create table if not exists public.activity_log (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid not null references public.users (id),
+  verb text not null check (verb in ('created', 'status_changed', 'accepted', 'blocked', 'unblocked')),
+  task_id uuid null references public.tasks (id) on delete set null,
+  detail text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists activity_log_created_at_idx on public.activity_log (created_at desc);
+
+alter table public.activity_log enable row level security;
+
+-- Scoped the same way as the "Team can view team tasks" policy above: a
+-- viewer sees activity from their own team only (themselves, their
+-- manager/reports), never company-wide.
+drop policy if exists "Team can view team activity" on public.activity_log;
+create policy "Team can view team activity"
+  on public.activity_log for select
+  to authenticated
+  using (actor_id in (select public.team_member_ids(auth.uid())));
+
+drop policy if exists "Users can log their own activity" on public.activity_log;
+create policy "Users can log their own activity"
+  on public.activity_log for insert
+  to authenticated
+  with check (actor_id = auth.uid());

@@ -27,9 +27,21 @@ vi.mock('./auth.js', async (importOriginal) => {
 vi.mock('./tasks.js', () => ({
   fetchMyTasks: vi.fn(async () => []),
   fetchTeamTasks: vi.fn(async () => []),
+  fetchAllTeamTasks: vi.fn(async () => []),
   createTask: vi.fn(),
   setTaskStatus: vi.fn(),
   toggleTaskDone: vi.fn(),
+}));
+
+// team.js (Phase 3) fetches activity + team members on render, same
+// network-independence concern as tasks.js above.
+vi.mock('./activity.js', () => ({
+  logActivity: vi.fn(),
+  fetchTeamActivity: vi.fn(async () => []),
+}));
+
+vi.mock('./users.js', () => ({
+  fetchTeamMembers: vi.fn(async () => []),
 }));
 
 describe('normalizePath', () => {

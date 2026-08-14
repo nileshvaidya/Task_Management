@@ -1,5 +1,47 @@
 # Test Report
 
+## Phase 3 — Team Feed & Team Overview
+
+Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`. Integration: `npm run test:integration` (now runs the Phase 1 users script, the Phase 2 tasks script, and the new team script).
+
+| # | Test case (from build brief §Phase 3) | Result | Notes |
+|---|---|---|---|
+| 1 | Creating a task inserts a corresponding activity-log entry visible in the Feed tab within the same session | ✅ | `createTask`/`setTaskStatus` now call `logActivity()` on success (`tasks.js`), unit-tested in `tasks.test.js` (asserts the exact `activity_log` insert payload). E2E (`e2e/phase3.spec.js`): creating a task via the dashboard posts both the task insert and the activity-log insert with matching `task_id`/`detail`. Chose refetch-on-navigation over a realtime subscription — the Feed tab loads fresh on every mount, which is simpler and sufficient for a 5–20 person team; noted as the brief's "pick one and test it" choice. |
+| 2 | Marking a task blocked surfaces it in "Blockers & Alerts" on Team Overview | ✅ | `computeBlockers()` (`teamStats.js`) filters team tasks to `blocked=true` and is unit-tested directly. Since the dependency flow that actually sets `blocked=true` doesn't exist until Phase 5, this phase proves the surfacing logic against fixture data (unit) and a mocked blocked task (e2e `Team Overview` test) rather than a full create-a-blocked-task UI flow — consistent with the brief's own note that this is "tested fully in Phase 5." |
+| 3 | Team Pulse % correctly reflects (completed / total) across the manager's team | ✅ | `computeTeamPulse()` unit-tested including the 0-task case (no divide-by-zero). E2E asserts the rendered `33%` (1 of 3 fixture tasks completed) plus the active/completed counts. |
+| 4 | Per-member "Today's Focus" card lists only that member's tasks due today, with completed ones struck through | ✅ | `computeTodaysFocus()` unit-tested (filters by owner + exact due date, marks `done`). `renderMemberCard` unit-tested for the strikethrough style and the "nothing due today" placeholder. E2E confirms each member's card shows only their own due-today task. |
+| 5 | Feed and Overview tabs are scoped to the logged-in manager's own team only — an employee sees their own team context, not company-wide data | ⏳ **Written, pending live run** | `scripts/test-rls-team.mjs` — two full teams (manager A + 2 reports, manager B + 1 report); asserts `team_member_ids()` returns the same team set for a manager or an employee caller (symmetric), `activity_log`/`tasks` visibility is team-scoped both directions, and — the case the naive approach would get wrong — that an unfiltered `users` select would leak *every* company manager via the pre-existing "public active managers" sign-up-picker policy, which is why `fetchTeamMembers`/`fetchAllTeamTasks` explicitly filter by `team_member_ids` rather than trusting a bare `select *`. Wired into `npm run test:integration`, same CI secrets gate as Phases 1–2. |
+
+### Additional Phase 3 coverage
+
+| Module | Tests | Result |
+|---|---|---|
+| `src/teamStats.js` (new) | 7 | ✅ |
+| `src/activity.js` (new) | 5 | ✅ |
+| `src/users.js` (new) | 3 | ✅ |
+| `src/tasks.js` (`fetchAllTeamTasks` + activity-logging on create/status-change) | 6 | ✅ |
+| `renderActivityCard`/`renderMemberCard` (`components.js`, new) | 8 | ✅ |
+| `formatRelativeTime` (`dateUtils.js`, new) | 5 | ✅ |
+| `e2e/phase3.spec.js` | 4 | ✅ |
+
+**Totals**: 123/123 Vitest unit tests passing (89 carried + 34 new) · 19/19 Playwright e2e tests passing (15 carried + 4 new) · lint clean · typecheck clean · production build succeeds.
+
+### Assumptions and open questions
+
+- **Sprint Progress sidebar left out of the Activity Feed tab.** The design reference's Team Feed shows a "Sprint Progress" card alongside the feed, but Phase 3's own build/test-case list (brief §3) doesn't call for it, and the data model has no "sprint" concept — only flat `projects`. Mapping one onto the other would be an extra undocumented assumption on top of an already-ambiguous one, so it's deferred rather than guessed at now. Documented inline in `team.js`.
+- **"Team" is defined as a manager plus their direct reports**, symmetric for whichever member is looking (a manager and their reports all see the same team-scoped data). This matches the data model (flat manager→report hierarchy, no manager-of-managers yet) and is the natural reading of "the manager's own team" from both the screens spec and Phase 3's test case 5's "an employee sees their own team context" — stated here since it's a data-model-adjacent RLS design decision (`team_root()`/`team_member_ids()` in `supabase/schema.sql`) worth flagging even though it wasn't blocking.
+
+### Bugs found and fixed during verification
+
+1. **A pre-existing RLS gap would have silently broken Team Overview for employees specifically**, caught during schema design rather than after the fact: a naive `owner_id in (select id from users where manager_id = auth.uid())`-style policy (copy-pasting the Phase 2 manager pattern) only works for a *manager* querying — the nested `users` subquery inside a policy's `USING` clause runs under the *querying* user's own RLS, and Phase 1 never granted employees visibility into siblings' `users` rows, so an employee's version of the same query would silently return zero rows. Fixed by moving the membership lookup into a `security definer` function (`team_member_ids()`) that bypasses that inner restriction, scoped only to "who shares my team_root" — verified by reasoning through both a manager and an employee caller path before writing `scripts/test-rls-team.mjs`, which asserts the symmetric result directly.
+2. **A second, related trap**: even with `team_member_ids()` in place, an *unfiltered* `select * from users` for "my team" would still have leaked every other manager company-wide, because Phase 1's "public can view active managers" policy (needed for the sign-up form's picker) is a separate, broader grant that ORs together with any new policy. `fetchTeamMembers`/`fetchAllTeamTasks` (`users.js`/`tasks.js`) explicitly filter by the `team_member_ids` RPC result rather than trusting "whatever RLS lets through" — documented inline and covered by `scripts/test-rls-team.mjs`'s negative case (employee A1 cannot select team B's employee profile).
+3. **Playwright mock shape mismatch during e2e authoring** (not an app bug): `.select().single()` expects a single JSON object back, matching real PostgREST's behavior when the client sends `Accept: application/vnd.pgrst.object+json` — an early draft of the new e2e test mocked the task/activity-log POST responses as `[{...}]` (array-of-one, mirroring plain `.select()` mocks elsewhere), which made `data.id` resolve to `undefined` client-side and silently null out `task_id` on the logged activity entry. Fixed to return a bare object, matching the existing convention already used by `e2e/phase2.spec.js`'s task-creation mock.
+
+### Known items carried forward (not blockers for Phase 3 sign-off)
+
+- **RLS integration tests for the new team-scoping policies are unrun locally** (no live Supabase credentials in this environment, by design — they're CI repo secrets only); `scripts/test-rls-team.mjs` is written, syntax-checked, and wired into `npm run test:integration` / CI, same gate as the Phase 1/2 scripts. This PR's CI run is the first real execution.
+- Carried from Phase 0–2: `npm audit` dev-tooling advisories (deferred, breaking Vite major bump).
+
 ## Phase 2 — Task CRUD & Dashboard
 
 Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`. Integration: `npm run test:integration` (runs both the Phase 1 users script and the new tasks script).
