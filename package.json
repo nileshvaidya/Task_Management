@@ -1,19 +1,37 @@
 {
-  "name": "task-management",
-  "version": "1.0.0",
+  "name": "worksync",
+  "version": "0.1.0",
   "private": true,
-  "description": "Task management app scaffold: static HTML/JS + Tailwind CSS + Supabase, deployed on Vercel.",
+  "type": "module",
+  "description": "WorkSync — task management app for small manufacturing/engineering teams. Plain HTML + Tailwind + vanilla JS, Supabase backend, Vite build.",
   "scripts": {
-    "build:css": "tailwindcss -i ./src/input.css -o ./public/css/styles.css --minify",
-    "build:config": "node ./scripts/generate-config.js",
-    "build:vendor": "mkdir -p public/js/vendor && cp node_modules/@supabase/supabase-js/dist/umd/supabase.js public/js/vendor/supabase.js",
-    "build": "npm run build:config && npm run build:css && npm run build:vendor",
-    "dev:css": "tailwindcss -i ./src/input.css -o ./public/css/styles.css --watch",
-    "serve": "node ./scripts/serve.js"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "seed": "node scripts/seed.js"
   },
   "devDependencies": {
+    "@eslint/js": "^9.11.0",
+    "@playwright/test": "^1.47.0",
+    "@testing-library/dom": "^10.4.0",
+    "@types/node": "^22.7.4",
+    "@vitest/coverage-v8": "^2.1.0",
+    "autoprefixer": "^10.4.20",
     "dotenv": "^16.4.5",
-    "tailwindcss": "^3.4.13"
+    "eslint": "^9.11.0",
+    "globals": "^15.9.0",
+    "jsdom": "^25.0.0",
+    "postcss": "^8.4.47",
+    "tailwindcss": "^3.4.13",
+    "typescript": "^5.6.2",
+    "vite": "^5.4.6",
+    "vite-plugin-pwa": "^0.20.5",
+    "vitest": "^2.1.0"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.112.3"
