@@ -79,6 +79,28 @@ grant execute on function public.touch_last_active() to authenticated;
 -- likely add further INSERT/UPDATE policies for the dependency flow rather
 -- than touching this table's shape).
 
+-- One-time migration guard: a project that previously ran the pre-WorkSync
+-- scaffold's schema (see the template/html-tailwind-supabase-vercel
+-- branch) may still have a `tasks` table shaped for that app (a `user_id`
+-- column, no `owner_id`). `create table if not exists` below would then
+-- silently no-op against that old shape, and every policy referencing
+-- `owner_id` would fail with "column does not exist". Drop it only when it
+-- matches that specific old shape — this becomes a permanent no-op after
+-- the first run, once the real WorkSync `tasks` table (with `owner_id`)
+-- exists, so it's safe to leave in place and re-run this file repeatedly.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'tasks' and column_name = 'user_id'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'tasks' and column_name = 'owner_id'
+  ) then
+    drop table public.tasks cascade;
+  end if;
+end $$;
+
 create table if not exists public.projects (
   id uuid primary key default gen_random_uuid(),
   name text not null unique
