@@ -560,6 +560,29 @@ create trigger tasks_check_assignee_active
   for each row
   execute function public.check_assignee_active();
 
+-- is_active_user must be security definer for the same reason
+-- team_member_ids (Phase 3) and is_active_manager (Phase 4) are: a plain
+-- subquery on public.users inside a policy's WITH CHECK clause runs under
+-- the *inserting* user's own RLS visibility into users, not bypassed —
+-- and Phase 3 only grants visibility into your own team's profiles. A
+-- cross-TEAM assignment (Employee A → Employee B, different manager)
+-- would then silently fail the check not because B is inactive, but
+-- because A isn't allowed to see B's row at all — caught by
+-- scripts/test-rls-dependencies.mjs's cross-team assignment case.
+create or replace function public.is_active_user(uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.users where id = uid and status = 'active' and deleted_at is null
+  );
+$$;
+
+grant execute on function public.is_active_user(uuid) to authenticated;
+
 -- Cross-assignment (manager → report, or a dependency assigned to anyone)
 -- needs owner_id <> created_by to be insertable at all — Phase 2's
 -- "Owners can insert own tasks" policy only ever allowed self-assignment.
@@ -574,13 +597,7 @@ create policy "Users can insert tasks for active users"
   to authenticated
   with check (
     created_by = auth.uid()
-    and (
-      owner_id = auth.uid()
-      or exists (
-        select 1 from public.users
-        where id = owner_id and status = 'active' and deleted_at is null
-      )
-    )
+    and (owner_id = auth.uid() or public.is_active_user(owner_id))
   );
 
 -- Auto-unblock (Phase 5 test case 9): when a task is marked completed,
