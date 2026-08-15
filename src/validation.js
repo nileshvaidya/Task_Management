@@ -73,6 +73,38 @@ export function validateSigninForm(form) {
 }
 
 /**
+ * The New Task dialog's "Has Dependency" section (Phase 5). `mode` is
+ * 'existing' (search picker) or 'new' (mini create-dependency form).
+ * `activeUserIds` scopes the "cannot assign to an inactive user" check
+ * (test case 10) to whichever users the dependency Assign To picker
+ * actually offered — the server (schema.sql's check_assignee_active
+ * trigger) enforces this too; this is just the friendlier client-side
+ * message shown before ever hitting the network.
+ * @param {{ mode?: string, taskId?: string, title?: string, assigneeId?: string }} form
+ * @param {string[]} [activeUserIds]
+ */
+export function validateDependencyForm(form, activeUserIds = []) {
+  /** @type {Record<string, string>} */
+  const errors = {};
+  const { mode = '', taskId = '', title = '', assigneeId = '' } = form || {};
+
+  if (mode === 'existing') {
+    if (!taskId) errors.taskId = 'Select an existing task to depend on.';
+  } else if (mode === 'new') {
+    if (!title.trim()) errors.title = 'Dependency title is required.';
+    if (!assigneeId) {
+      errors.assigneeId = 'Select who this dependency is assigned to.';
+    } else if (!activeUserIds.includes(assigneeId)) {
+      errors.assigneeId = 'Cannot assign a task to an inactive user.';
+    }
+  } else {
+    errors.mode = 'Choose whether to search an existing task or create a new one.';
+  }
+
+  return { valid: Object.keys(errors).length === 0, errors };
+}
+
+/**
  * @param {{ title?: string, dueDate?: string }} form
  * @param {string} [today] YYYY-MM-DD, injectable for tests
  */

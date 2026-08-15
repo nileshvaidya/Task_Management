@@ -46,6 +46,10 @@ vi.mock('./tasks.js', () => ({
   createTask: vi.fn(),
   setTaskStatus: vi.fn(),
   toggleTaskDone: vi.fn(),
+  acceptTask: vi.fn(),
+  fetchAssignableUsers: vi.fn(async () => []),
+  fetchDependencyCandidates: vi.fn(async () => []),
+  createTaskWithDependency: vi.fn(),
 }));
 
 // team.js (Phase 3) fetches activity + team members on render, same

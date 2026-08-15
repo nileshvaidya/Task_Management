@@ -5,7 +5,7 @@ import { getCurrentProfile } from '../auth.js';
 import { renderShell } from '../layout.js';
 import { renderTaskRow, escapeHtml } from '../components.js';
 import { createStore } from '../state.js';
-import { fetchMyTasks, fetchTeamTasks, createTask, setTaskStatus, toggleTaskDone } from '../tasks.js';
+import { fetchMyTasks, fetchTeamTasks, createTask, setTaskStatus, toggleTaskDone, acceptTask } from '../tasks.js';
 import { computeWeeklyProgress } from '../taskStats.js';
 import { todayISODate, buildCalendarCells } from '../dateUtils.js';
 
@@ -111,7 +111,7 @@ function renderContent(content, state, user) {
                 ? `<p class="text-neutral-500 text-sm py-4">Loading…</p>`
                 : visibleTasks.length === 0
                   ? `<p class="text-neutral-500 text-sm py-4">No tasks here.</p>`
-                  : visibleTasks.map(renderTaskRow).join('')
+                  : visibleTasks.map((t) => renderTaskRow(t, user.id)).join('')
             }
           </div>
         </div>
@@ -196,6 +196,14 @@ function wireEvents(content, store, user, loadTasks) {
     select.addEventListener('change', async () => {
       const id = select.getAttribute('data-task-id');
       await setTaskStatus(id, select.value, user.id);
+      await loadTasks();
+    });
+  });
+
+  content.querySelectorAll('[data-action="accept-task"]').forEach((checkbox) => {
+    checkbox.addEventListener('change', async () => {
+      const id = checkbox.getAttribute('data-task-id');
+      await acceptTask(id, user.id);
       await loadTasks();
     });
   });
