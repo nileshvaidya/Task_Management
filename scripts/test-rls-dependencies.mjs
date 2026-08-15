@@ -80,13 +80,25 @@ async function run() {
   const taskIds = [];
 
   try {
+    console.log('\nPreflight: checking public.is_active_user(uuid) is reachable and returns true for employee B...');
+    const { data: preflightResult, error: preflightErr } = await clientEmpA.rpc('is_active_user', { uid: empB.id });
+    if (preflightErr) {
+      console.error('    (preflight error detail):', preflightErr.code, '-', preflightErr.message);
+    } else {
+      console.log('    is_active_user(empB) =', preflightResult);
+    }
+
     console.log("\nCross-team assignment: employee A can create a task assigned to employee B (a different team) — RLS test case 2...");
     const { data: crossTask, error: crossErr } = await clientEmpA
       .from('tasks')
       .insert({ title: `Design sign-off ${stamp}`, due_date: today, owner_id: empB.id, created_by: empA.id })
       .select()
       .single();
+    if (crossErr) console.error('    (insert error detail):', crossErr.code, '-', crossErr.message);
     assert(!crossErr && !!crossTask, 'employee A can insert a task assigned to employee B (cross-team)');
+    if (!crossTask) {
+      throw new Error('Cannot continue: the cross-team insert did not return a row, see error detail above.');
+    }
     taskIds.push(crossTask.id);
     assert(crossTask.accepted === false, 'accepted defaults to false for a cross-assigned task (data model rule), regardless of what the client sent');
 
