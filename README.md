@@ -15,7 +15,7 @@ acceptance workflow. Built to the "Nocturne" dark-theme design system.
 
 This project is being built in phases per the build brief; see
 `CHANGELOG.md` for what's shipped and `TEST_REPORT.md` for test results per
-phase. **Current status: Phase 3 (Team Feed & Team Overview) complete.**
+phase. **Current status: Phase 4 (User Admin) complete.**
 
 ## Project layout
 
@@ -32,24 +32,29 @@ src/
   tasks.js                        # task CRUD data layer
   activity.js                      # activity_log data layer (logActivity, fetchTeamActivity)
   users.js                          # team membership queries (fetchTeamMembers)
-  dateUtils.js                       # pure date helpers (today, week range, calendar cells, relative time)
-  taskStats.js                        # pure calculations (weekly progress, ...)
-  teamStats.js                         # pure calculations (team pulse, blockers, today's focus)
-  layout.js                             # shared app shell (desktop sidebar / mobile top bar+tabs)
-  components.js                          # shared render helpers (escapeHtml, renderIdentityBlock, renderTaskRow, renderActivityCard, renderMemberCard)
-  screens/                                # dashboard.js, team.js, admin.js, login.js
-  dialogs/                                 # newTaskDialog.js
+  admin.js                           # User Admin data layer (fetchAdminUsers/Tasks, inviteUser, setUserStatus, softDeleteUser, overrideTask)
+  adminFilter.js                      # pure search-filter logic for the User Management table
+  dateUtils.js                         # pure date helpers (today, week range, calendar cells, relative time)
+  taskStats.js                          # pure calculations (weekly progress, ...)
+  teamStats.js                           # pure calculations (team pulse, blockers, today's focus)
+  layout.js                               # shared app shell (desktop sidebar / mobile top bar+tabs)
+  components.js                            # shared render helpers (escapeHtml, renderIdentityBlock, renderTaskRow, renderActivityCard, renderMemberCard)
+  screens/                                  # dashboard.js, team.js, admin.js, login.js
+  dialogs/                                   # newTaskDialog.js, addUserDialog.js
   styles/
-    tailwind-base.css                        # @tailwind base
-    nocturne.css                              # ported verbatim from design-reference/
-    tailwind-components-utilities.css          # @tailwind components/utilities
+    tailwind-base.css                          # @tailwind base
+    nocturne.css                                # ported verbatim from design-reference/
+    tailwind-components-utilities.css            # @tailwind components/utilities
 scripts/
   seed.js                 # demo user seeding (Sarah Jenkins/manager, David Chen + Marcus Cole/employees)
   test-rls-users.mjs       # RLS integration tests for the users table
   test-rls-tasks.mjs        # RLS integration tests for the tasks table
   test-rls-team.mjs          # RLS integration tests for team scoping (activity_log, team tasks/profiles)
+  test-rls-admin.mjs          # RPC integration tests for the Phase 4 admin functions
 supabase/
-  schema.sql               # users + tasks/projects + activity_log tables, RLS policies, team_root()/team_member_ids()
+  schema.sql               # users + tasks/projects + activity_log tables, RLS policies, team_root()/team_member_ids(), Phase 4 admin RPCs
+  functions/
+    admin-invite-user/       # Edge Function: real Auth invite for "Add User" (needs `supabase functions deploy`)
 design-reference/        # the Nocturne design system + prototype handoff
 e2e/                      # Playwright specs
 vite.config.js, tailwind.config.js, playwright.config.js, eslint.config.js, tsconfig.json
@@ -62,7 +67,7 @@ npm install
 cp .env.example .env      # fill in VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
 ```
 
-Before first run, apply `supabase/schema.sql` in your Supabase project's SQL editor (it's additive/idempotent — safe to re-run on top of an earlier phase's version, it'll just add what's new, e.g. Phase 3's `activity_log` table and team-scoping policies), and disable **Authentication → Providers → Email → Confirm email** (see `supabase/README.md` for why).
+Before first run, apply `supabase/schema.sql` in your Supabase project's SQL editor (it's additive/idempotent — safe to re-run on top of an earlier phase's version, it'll just add what's new, e.g. Phase 4's admin RPCs), and disable **Authentication → Providers → Email → Confirm email** (see `supabase/README.md` for why). For "Add User" to work, also deploy the Edge Function once: `supabase functions deploy admin-invite-user` (see `supabase/README.md`).
 
 ```bash
 npm run dev                # http://localhost:5173

@@ -11,13 +11,28 @@ const anon = async () => null;
 // that export — getSessionUser must stay real, since login.js's own
 // "already signed in, redirect forward" check also calls it, and a global
 // fake session there would break every "shows the login screen" case.
+// Default role is 'manager' (the more permissive of the two) so the
+// existing dashboard/team/admin "mounts screen" checks below don't trip
+// over admin.js's Phase 4 manager-only guard; the employee-specific
+// redirect case overrides this per-test instead.
 vi.mock('./auth.js', async (importOriginal) => {
   const actual = /** @type {object} */ (await importOriginal());
   return {
     ...actual,
-    getCurrentProfile: vi.fn(async () => ({ id: 'u1', name: 'Test User', email: 'test@example.com', role: 'employee' })),
+    getCurrentProfile: vi.fn(async () => ({ id: 'u1', name: 'Test User', email: 'test@example.com', role: 'manager' })),
   };
 });
+
+// admin.js (Phase 4) fetches users/tasks on render, same network-independence
+// concern as tasks.js/activity.js/users.js above.
+vi.mock('./admin.js', () => ({
+  fetchAdminUsers: vi.fn(async () => []),
+  fetchAdminTasks: vi.fn(async () => []),
+  inviteUser: vi.fn(),
+  setUserStatus: vi.fn(),
+  softDeleteUser: vi.fn(),
+  overrideTask: vi.fn(),
+}));
 
 // dashboard.js fetches tasks on render. Unit tests must never depend on
 // network reachability regardless of what VITE_SUPABASE_URL happens to be
@@ -76,9 +91,24 @@ describe('renderRoute — protected routes with a session', () => {
     expect(container.querySelector('[data-screen="team"]')).toBeTruthy();
   });
 
-  it('mounts the admin screen for #/admin when signed in', async () => {
+  it('mounts the admin screen for #/admin when signed in as a manager', async () => {
     await renderRoute(container, '#/admin', authed);
     expect(container.querySelector('[data-screen="admin"]')).toBeTruthy();
+  });
+
+  it('redirects a non-manager away from #/admin instead of rendering it (Phase 4 test case 1)', async () => {
+    const { getCurrentProfile } = await import('./auth.js');
+    /** @type {import('vitest').Mock} */ (getCurrentProfile).mockResolvedValueOnce({
+      id: 'u1',
+      name: 'Test Employee',
+      email: 'employee@example.com',
+      role: 'employee',
+    });
+    const originalHash = window.location.hash;
+    await renderRoute(container, '#/admin', authed);
+    expect(container.querySelector('[data-screen="admin"]')).toBeFalsy();
+    expect(window.location.hash).toBe('#/dashboard');
+    window.location.hash = originalHash;
   });
 });
 

@@ -24,12 +24,16 @@ const NAV_ICONS = {
 
 /**
  * @param {HTMLElement} container
- * @param {{ activeRoute: string, user: { id: string, name: string, email: string } }} opts
+ * @param {{ activeRoute: string, user: { id: string, name: string, email: string, role: string } }} opts
  * @returns {HTMLElement} the content mount point for the calling screen to render into
  */
 export function renderShell(container, { activeRoute, user }) {
+  // User Admin is restricted to managers (Phase 4 test case 1) — no point
+  // showing a nav link that would just redirect an employee away.
+  const visibleNavItems = NAV_ITEMS.filter((item) => item.route !== '/admin' || user.role === 'manager');
+
   const navHtml = (mobile) =>
-    NAV_ITEMS.map((item) => {
+    visibleNavItems.map((item) => {
       const active = item.route === activeRoute;
       const cls = mobile
         ? `flex-1 text-center text-[11px] ${active ? 'text-accent' : 'text-neutral-500'}`

@@ -19,6 +19,25 @@ active managers' `name`/`email` to unauthenticated requests — the sign-up
 form needs to list managers for an employee to pick from before that
 employee has a session. No employee rows or inactive accounts are exposed.
 
+## Edge Functions (Phase 4)
+
+`supabase/functions/admin-invite-user` handles "Add User" — it needs the
+Auth Admin API (`auth.admin.inviteUserByEmail`), which only ever works with
+the service-role key, so it can't run client-side. Deploy it once (and
+again after any change to `index.ts`):
+
+```bash
+supabase link --project-ref <your-project-ref>   # one-time, if not already linked
+supabase functions deploy admin-invite-user
+```
+
+`SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` are
+injected automatically for every deployed function — no manual secret
+configuration needed. Until this is deployed, the Admin screen's "Add User"
+action will fail with a network/404 error; everything else on the Admin
+screen (toggle active/inactive, delete, override) runs through plain
+Postgres RPCs in `schema.sql` and needs no separate deployment.
+
 ## Integration tests
 
 `scripts/test-rls-users.mjs` exercises the RLS policies above against a

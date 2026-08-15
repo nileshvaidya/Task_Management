@@ -34,6 +34,33 @@ export function validateSignupForm(form) {
 }
 
 /**
+ * "Add User" (Phase 4) — no password: the new account is created via a
+ * real Supabase Auth invite (see supabase/functions/admin-invite-user),
+ * not a self-chosen password.
+ * @param {{ name?: string, email?: string, role?: string, managerId?: string }} form
+ */
+export function validateAddUserForm(form) {
+  /** @type {Record<string, string>} */
+  const errors = {};
+  const { name = '', email = '', role = '', managerId = '' } = form || {};
+
+  if (!name.trim()) errors.name = 'Name is required.';
+  if (!email.trim()) {
+    errors.email = 'Email is required.';
+  } else if (!EMAIL_RE.test(email.trim())) {
+    errors.email = 'Enter a valid email address.';
+  }
+  if (role !== 'manager' && role !== 'employee') {
+    errors.role = 'Select a role.';
+  }
+  if (role === 'employee' && !managerId) {
+    errors.managerId = 'Select the manager this employee reports to.';
+  }
+
+  return { valid: Object.keys(errors).length === 0, errors };
+}
+
+/**
  * @param {{ email?: string, password?: string }} form
  */
 export function validateSigninForm(form) {
