@@ -465,6 +465,11 @@ begin
   update public.tasks
   set status = new_status,
       owner_id = coalesce(new_owner_id, owner_id),
+      -- Phase 5: an unaccepted task can't otherwise move off 'planned' (see
+      -- tasks_accepted_status_check below). OVERRIDE is the one path allowed
+      -- to bypass that — implicitly accepting the task in the same step,
+      -- per the brief's default rule for this exact case.
+      accepted = case when new_status <> 'planned' then true else accepted end,
       blocked = case when new_status = 'completed' then false else blocked end,
       blocked_reason = case when new_status = 'completed' then null else blocked_reason end
   where id = task_id
@@ -498,3 +503,186 @@ begin
   alter table public.activity_log add constraint activity_log_verb_check
     check (verb in ('created', 'status_changed', 'accepted', 'blocked', 'unblocked', 'overridden'));
 end $$;
+
+-- Phase 5: Dependencies & Cross-User Task Assignment & Acceptance. Two
+-- kinds of cross-assignment now exist — a manager assigning a primary task
+-- directly to a report, and anyone creating a dependency task assigned to
+-- another user — and both are indistinguishable at the row level (a
+-- dependency task is just a normal task; only the *other* task's
+-- depends_on_task_id points at it). So the real security boundary here
+-- isn't "who can insert a row for whom" — it's acceptance: `accepted`
+-- already defaults to false whenever created_by <> owner_id (data model,
+-- section 1), and the CHECK constraint below makes that unenforceable to
+-- bypass except through the one explicit escape hatch (OVERRIDE, above).
+
+-- An unaccepted task cannot move off 'planned' via any path except
+-- override_task() (which explicitly accepts it in the same statement) —
+-- Phase 5 test case 8. Defense in depth: the Task Acceptance UI already
+-- hides status controls client-side; this is the server-side backstop.
+alter table public.tasks drop constraint if exists tasks_accepted_status_check;
+alter table public.tasks add constraint tasks_accepted_status_check
+  check (accepted is not false or status = 'planned');
+
+-- A task can't be assigned (owner_id) to an inactive/deleted user — Phase 5
+-- test case 10. A BEFORE INSERT trigger (rather than folding this into the
+-- INSERT policy alone) gives a readable error message instead of RLS's
+-- generic "row violates policy" — the trigger raises before RLS's WITH
+-- CHECK is even evaluated, so this is the message the client actually sees.
+-- Same trigger also enforces the data model's own rule (section 1): accepted
+-- is forced to false whenever created_by <> owner_id, regardless of what the
+-- client sends — this is a data-integrity rule, not a client choice, so it
+-- isn't left to application code to remember on every insert path.
+create or replace function public.check_assignee_active()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  assignee_status text;
+  assignee_deleted timestamptz;
+begin
+  if new.owner_id <> new.created_by then
+    select status, deleted_at into assignee_status, assignee_deleted
+    from public.users where id = new.owner_id;
+    if assignee_status is distinct from 'active' or assignee_deleted is not null then
+      raise exception 'Cannot assign a task to an inactive user.';
+    end if;
+    new.accepted := false;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists tasks_check_assignee_active on public.tasks;
+create trigger tasks_check_assignee_active
+  before insert on public.tasks
+  for each row
+  execute function public.check_assignee_active();
+
+-- is_active_user must be security definer for the same reason
+-- team_member_ids (Phase 3) and is_active_manager (Phase 4) are: a plain
+-- subquery on public.users inside a policy's WITH CHECK clause runs under
+-- the *inserting* user's own RLS visibility into users, not bypassed —
+-- and Phase 3 only grants visibility into your own team's profiles. A
+-- cross-TEAM assignment (Employee A → Employee B, different manager)
+-- would then silently fail the check not because B is inactive, but
+-- because A isn't allowed to see B's row at all — caught by
+-- scripts/test-rls-dependencies.mjs's cross-team assignment case.
+create or replace function public.is_active_user(uid uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.users where id = uid and status = 'active' and deleted_at is null
+  );
+$$;
+
+grant execute on function public.is_active_user(uuid) to authenticated;
+
+-- Cross-assignment (manager → report, or a dependency assigned to anyone)
+-- needs owner_id <> created_by to be insertable at all — Phase 2's
+-- "Owners can insert own tasks" policy only ever allowed self-assignment.
+-- Replaced with a broader check: assign to yourself, or to any active
+-- user — narrowed further (inactive users rejected) by the trigger above,
+-- and made safe in practice by the acceptance gate rather than by
+-- restricting who can be targeted.
+drop policy if exists "Owners can insert own tasks" on public.tasks;
+drop policy if exists "Users can insert tasks for active users" on public.tasks;
+create policy "Users can insert tasks for active users"
+  on public.tasks for insert
+  to authenticated
+  with check (
+    created_by = auth.uid()
+    and (owner_id = auth.uid() or public.is_active_user(owner_id))
+  );
+
+-- INSERT ... RETURNING (what every insert().select() call does) also
+-- requires the inserted row to pass a SELECT policy, not just the INSERT
+-- policy's WITH CHECK — a Postgres RLS detail easy to miss, caught only
+-- once scripts/test-rls-dependencies.mjs ran the cross-team insert for
+-- real: the WITH CHECK above now allows it, but none of the existing
+-- SELECT policies (owner / manager-of-owner / same-team) grant the
+-- creator visibility into a task they just created for someone on a
+-- different team, so the RETURNING row failed RLS with the exact same
+-- 42501 error as the original bug. A creator can always see what they
+-- created, regardless of who it's assigned to.
+drop policy if exists "Creators can view tasks they created" on public.tasks;
+create policy "Creators can view tasks they created"
+  on public.tasks for select
+  to authenticated
+  using (created_by = auth.uid());
+
+-- Auto-unblock (Phase 5 test case 9): when a task is marked completed,
+-- clear blocked/blocked_reason on every task that depends on it, and log
+-- an 'unblocked' activity entry for each one's owner. security definer so
+-- this works regardless of who completed the dependency — the dependent
+-- task usually belongs to someone else entirely, who the completer has no
+-- RLS-granted write access to otherwise.
+create or replace function public.clear_dependent_blocks()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  dep record;
+begin
+  if new.status = 'completed' and old.status is distinct from 'completed' then
+    for dep in
+      update public.tasks
+      set blocked = false, blocked_reason = null
+      where depends_on_task_id = new.id and blocked = true
+      returning id, owner_id, title
+    loop
+      insert into public.activity_log (actor_id, verb, task_id, detail)
+      values (dep.owner_id, 'unblocked', dep.id, dep.title || ' — no longer blocked, ' || new.title || ' was completed');
+    end loop;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists tasks_clear_dependent_blocks on public.tasks;
+create trigger tasks_clear_dependent_blocks
+  after update on public.tasks
+  for each row
+  execute function public.clear_dependent_blocks();
+
+-- The dependency picker needs two company-wide, narrowly-scoped reads that
+-- no existing RLS policy grants to a plain employee (Phase 5 test cases 2
+-- and 3): who can this be assigned to, and which existing tasks can this
+-- depend on. Same "narrow RPC over broad policy" principle as Phase 3/4 —
+-- callable by any authenticated user, but each returns only the minimum
+-- fields needed for its picker, not full row access.
+create or replace function public.list_assignable_users()
+returns table (id uuid, name text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select u.id, u.name from public.users u
+  where u.status = 'active' and u.deleted_at is null
+  order by u.name;
+$$;
+
+grant execute on function public.list_assignable_users() to authenticated;
+
+create or replace function public.list_all_tasks_for_dependency()
+returns table (id uuid, title text, owner_id uuid, owner_name text, status text)
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select t.id, t.title, t.owner_id, u.name as owner_name, t.status
+  from public.tasks t
+  join public.users u on u.id = t.owner_id
+  order by t.created_at desc;
+$$;
+
+grant execute on function public.list_all_tasks_for_dependency() to authenticated;

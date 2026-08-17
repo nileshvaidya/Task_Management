@@ -15,7 +15,7 @@ acceptance workflow. Built to the "Nocturne" dark-theme design system.
 
 This project is being built in phases per the build brief; see
 `CHANGELOG.md` for what's shipped and `TEST_REPORT.md` for test results per
-phase. **Current status: Phase 4 (User Admin) complete.**
+phase. **Current status: Phase 5 (Dependencies & Cross-User Task Assignment & Acceptance) complete.**
 
 ## Project layout
 
@@ -29,30 +29,33 @@ src/
   validation.js                # pure form-validation logic (signup/signin/new-task)
   demoMode.js                   # VITE_DEMO_MODE + ?demoRole= dev bypass
   state.js                       # small in-memory store + pub-sub
-  tasks.js                        # task CRUD data layer
+  tasks.js                        # task CRUD + dependency/acceptance data layer
   activity.js                      # activity_log data layer (logActivity, fetchTeamActivity)
   users.js                          # team membership queries (fetchTeamMembers)
   admin.js                           # User Admin data layer (fetchAdminUsers/Tasks, inviteUser, setUserStatus, softDeleteUser, overrideTask)
   adminFilter.js                      # pure search-filter logic for the User Management table
-  dateUtils.js                         # pure date helpers (today, week range, calendar cells, relative time)
-  taskStats.js                          # pure calculations (weekly progress, ...)
-  teamStats.js                           # pure calculations (team pulse, blockers, today's focus)
-  layout.js                               # shared app shell (desktop sidebar / mobile top bar+tabs)
-  components.js                            # shared render helpers (escapeHtml, renderIdentityBlock, renderTaskRow, renderActivityCard, renderMemberCard)
-  screens/                                  # dashboard.js, team.js, admin.js, login.js
-  dialogs/                                   # newTaskDialog.js, addUserDialog.js
+  projects.js                          # projects data layer (fetchProjects, createProject)
+  dependencyFilter.js                   # pure search-filter logic for the dependency task picker
+  dateUtils.js                           # pure date helpers (today, week range, calendar cells, relative time)
+  taskStats.js                            # pure calculations (weekly progress, ...)
+  teamStats.js                             # pure calculations (team pulse, blockers, today's focus)
+  layout.js                                 # shared app shell (desktop sidebar / mobile top bar+tabs)
+  components.js                              # shared render helpers (escapeHtml, renderIdentityBlock, renderTaskRow incl. Task Acceptance UI, renderActivityCard, renderMemberCard)
+  screens/                                    # dashboard.js, team.js, admin.js, login.js
+  dialogs/                                     # newTaskDialog.js (full: Project/Priority/Assign To/Dependencies), addUserDialog.js
   styles/
-    tailwind-base.css                          # @tailwind base
-    nocturne.css                                # ported verbatim from design-reference/
-    tailwind-components-utilities.css            # @tailwind components/utilities
+    tailwind-base.css                            # @tailwind base
+    nocturne.css                                  # ported verbatim from design-reference/ (+ .wsswitch, see CHANGELOG)
+    tailwind-components-utilities.css              # @tailwind components/utilities
 scripts/
   seed.js                 # demo user seeding (Sarah Jenkins/manager, David Chen + Marcus Cole/employees)
   test-rls-users.mjs       # RLS integration tests for the users table
   test-rls-tasks.mjs        # RLS integration tests for the tasks table
   test-rls-team.mjs          # RLS integration tests for team scoping (activity_log, team tasks/profiles)
   test-rls-admin.mjs          # RPC integration tests for the Phase 4 admin functions
+  test-rls-dependencies.mjs    # RLS/RPC integration tests for Phase 5 dependencies & acceptance
 supabase/
-  schema.sql               # users + tasks/projects + activity_log tables, RLS policies, team_root()/team_member_ids(), Phase 4 admin RPCs
+  schema.sql               # users + tasks/projects + activity_log tables, RLS policies, team_root()/team_member_ids(), admin RPCs, Phase 5 dependency/acceptance triggers + RPCs
   functions/
     admin-invite-user/       # Edge Function: real Auth invite for "Add User" (needs `supabase functions deploy`)
 design-reference/        # the Nocturne design system + prototype handoff
@@ -67,7 +70,7 @@ npm install
 cp .env.example .env      # fill in VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY
 ```
 
-Before first run, apply `supabase/schema.sql` in your Supabase project's SQL editor (it's additive/idempotent — safe to re-run on top of an earlier phase's version, it'll just add what's new, e.g. Phase 4's admin RPCs), and disable **Authentication → Providers → Email → Confirm email** (see `supabase/README.md` for why). For "Add User" to work, also deploy the Edge Function once: `supabase functions deploy admin-invite-user` (see `supabase/README.md`).
+Before first run, apply `supabase/schema.sql` in your Supabase project's SQL editor (it's additive/idempotent — safe to re-run on top of an earlier phase's version, it'll just add what's new, e.g. Phase 5's dependency/acceptance triggers and RPCs), and disable **Authentication → Providers → Email → Confirm email** (see `supabase/README.md` for why). For "Add User" to work, also deploy the Edge Function once: `supabase functions deploy admin-invite-user` (see `supabase/README.md`).
 
 ```bash
 npm run dev                # http://localhost:5173

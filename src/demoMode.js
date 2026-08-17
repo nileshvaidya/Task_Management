@@ -1,8 +1,13 @@
-// Dev-only convenience: `?demoRole=manager` or `?demoRole=employee` in the
-// URL bypasses real Supabase auth entirely, behind VITE_DEMO_MODE so it can
-// never activate in a production build unless explicitly enabled. Matches
-// the seed data (scripts/seed.js) so screens look right without a live
-// session. Never reference this from auth.js's real sign-in/sign-up path.
+// Dev-only convenience: `?demoRole=manager`, `?demoRole=employee`, or
+// `?demoRole=employee2` in the URL bypasses real Supabase auth entirely,
+// behind VITE_DEMO_MODE so it can never activate in a production build
+// unless explicitly enabled. Matches the seed data (scripts/seed.js) so
+// screens look right without a live session. Never reference this from
+// auth.js's real sign-in/sign-up path. `employee2` (Marcus Cole) exists
+// specifically so e2e tests can represent two distinct employees at once —
+// Phase 5's cross-user dependency/acceptance flow (build brief test 11)
+// needs "Employee A" and "Employee B" to be different people, which two
+// fixed manager/employee identities alone can't represent.
 export const DEMO_USERS = {
   manager: {
     id: 'demo-u1',
@@ -20,6 +25,14 @@ export const DEMO_USERS = {
     manager_id: 'demo-u1',
     status: 'active',
   },
+  employee2: {
+    id: 'demo-u3',
+    name: 'Marcus Cole',
+    email: 'm.cole@company.com',
+    role: 'employee',
+    manager_id: 'demo-u1',
+    status: 'active',
+  },
 };
 
 /**
@@ -32,5 +45,5 @@ export function getDemoUser(
 ) {
   if (!demoModeEnabled) return null;
   const role = new URLSearchParams(search).get('demoRole');
-  return role === 'manager' || role === 'employee' ? DEMO_USERS[role] : null;
+  return role in DEMO_USERS ? DEMO_USERS[role] : null;
 }

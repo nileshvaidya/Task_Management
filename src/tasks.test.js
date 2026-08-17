@@ -1,5 +1,16 @@
 import { describe, it, expect, vi } from 'vitest';
-import { fetchMyTasks, fetchTeamTasks, fetchAllTeamTasks, createTask, setTaskStatus, toggleTaskDone } from './tasks.js';
+import {
+  fetchMyTasks,
+  fetchTeamTasks,
+  fetchAllTeamTasks,
+  createTask,
+  setTaskStatus,
+  toggleTaskDone,
+  acceptTask,
+  fetchAssignableUsers,
+  fetchDependencyCandidates,
+  createTaskWithDependency,
+} from './tasks.js';
 
 function chainable(result) {
   const builder = {
@@ -170,6 +181,196 @@ describe('setTaskStatus', () => {
     });
     await setTaskStatus('t1', 'in-progress', undefined, client);
     expect(activityInsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('acceptTask', () => {
+  it('sets accepted=true and logs an "accepted" activity entry', async () => {
+    const activityInsert = vi.fn(() => chainable({ data: { id: 'a1' }, error: null }));
+    const client = tableRoutedClient({
+      tasks: {
+        update: () => ({
+          eq: () => ({ select: () => ({ single: () => Promise.resolve({ data: { id: 't1', title: 'Write report' }, error: null }) }) }),
+        }),
+      },
+      activity_log: { insert: activityInsert },
+    });
+    const { data, error } = await acceptTask('t1', 'u2', client);
+    expect(error).toBeNull();
+    expect(data).toEqual({ id: 't1', title: 'Write report' });
+    expect(activityInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ actor_id: 'u2', verb: 'accepted', task_id: 't1', detail: 'Write report' })
+    );
+  });
+});
+
+describe('fetchAssignableUsers', () => {
+  it('returns the users from the list_assignable_users RPC', async () => {
+    const users = [{ id: 'u1', name: 'Sarah' }];
+    const client = { rpc: vi.fn(() => Promise.resolve({ data: users, error: null })) };
+    expect(await fetchAssignableUsers(client)).toEqual(users);
+    expect(client.rpc).toHaveBeenCalledWith('list_assignable_users');
+  });
+
+  it('returns an empty array on error', async () => {
+    const client = { rpc: vi.fn(() => Promise.resolve({ data: null, error: { message: 'boom' } })) };
+    expect(await fetchAssignableUsers(client)).toEqual([]);
+  });
+});
+
+describe('fetchDependencyCandidates', () => {
+  it('returns tasks from the list_all_tasks_for_dependency RPC', async () => {
+    const tasks = [{ id: 't1', title: 'x', owner_id: 'u1', owner_name: 'Sarah', status: 'planned' }];
+    const client = { rpc: vi.fn(() => Promise.resolve({ data: tasks, error: null })) };
+    expect(await fetchDependencyCandidates(client)).toEqual(tasks);
+    expect(client.rpc).toHaveBeenCalledWith('list_all_tasks_for_dependency');
+  });
+
+  it('returns an empty array on error', async () => {
+    const client = { rpc: vi.fn(() => Promise.resolve({ data: null, error: { message: 'boom' } })) };
+    expect(await fetchDependencyCandidates(client)).toEqual([]);
+  });
+});
+
+describe('createTaskWithDependency', () => {
+  function mockClientForDependency({ inserts, updateResult }) {
+    const activityInsert = vi.fn(() => chainable({ data: { id: 'a' }, error: null }));
+    const insertMock = vi.fn();
+    inserts.forEach((result) => insertMock.mockImplementationOnce(() => chainable(result)));
+    const updateMock = vi.fn(() => ({
+      eq: () => ({ select: () => ({ single: () => Promise.resolve(updateResult) }) }),
+    }));
+    const from = vi.fn((table) => {
+      if (table === 'activity_log') return { insert: activityInsert };
+      return { insert: insertMock, update: updateMock };
+    });
+    return { from, activityInsert, insertMock, updateMock };
+  }
+
+  const primaryTask = { id: 'p1', title: 'Write Q3 report' };
+
+  it('creates only the primary task when no dependency is given', async () => {
+    const client = mockClientForDependency({ inserts: [{ data: primaryTask, error: null }], updateResult: null });
+    const { data, error } = await createTaskWithDependency(
+      { title: 'Write Q3 report', dueDate: '2026-08-14', ownerId: 'u1', createdBy: 'u1', dependency: null },
+      client
+    );
+    expect(error).toBeNull();
+    expect(data).toEqual(primaryTask);
+    expect(client.updateMock).not.toHaveBeenCalled();
+  });
+
+  it('creating a new dependency WITH "requires acceptance" blocks the primary task (test case 4)', async () => {
+    const depTask = { id: 'd1', title: 'Design sign-off' };
+    const updatedPrimary = { ...primaryTask, blocked: true, status: 'in-progress', depends_on_task_id: 'd1' };
+    const client = mockClientForDependency({
+      inserts: [{ data: primaryTask, error: null }, { data: depTask, error: null }],
+      updateResult: { data: updatedPrimary, error: null },
+    });
+
+    const { data, error } = await createTaskWithDependency(
+      {
+        title: 'Write Q3 report',
+        dueDate: '2026-08-14',
+        ownerId: 'u1',
+        createdBy: 'u1',
+        dependency: { mode: 'new', requiresAcceptance: true, title: 'Design sign-off', assigneeId: 'u2', assigneeName: 'David Chen' },
+      },
+      client
+    );
+
+    expect(error).toBeNull();
+    expect(data).toEqual(updatedPrimary);
+    expect(client.updateMock).toHaveBeenCalledWith({
+      depends_on_task_id: 'd1',
+      status: 'in-progress',
+      blocked: true,
+      blocked_reason: 'David Chen — Design sign-off',
+    });
+    expect(client.activityInsert).toHaveBeenCalledWith(
+      expect.objectContaining({ verb: 'blocked', task_id: 'p1', detail: 'David Chen — Design sign-off' })
+    );
+  });
+
+  it('creating a new dependency WITHOUT "requires acceptance" links it but does not block (test case 5)', async () => {
+    const depTask = { id: 'd1', title: 'Design sign-off' };
+    const updatedPrimary = { ...primaryTask, depends_on_task_id: 'd1' };
+    const client = mockClientForDependency({
+      inserts: [{ data: primaryTask, error: null }, { data: depTask, error: null }],
+      updateResult: { data: updatedPrimary, error: null },
+    });
+
+    const { data, error } = await createTaskWithDependency(
+      {
+        title: 'Write Q3 report',
+        dueDate: '2026-08-14',
+        ownerId: 'u1',
+        createdBy: 'u1',
+        dependency: { mode: 'new', requiresAcceptance: false, title: 'Design sign-off', assigneeId: 'u2', assigneeName: 'David Chen' },
+      },
+      client
+    );
+
+    expect(error).toBeNull();
+    expect(data).toEqual(updatedPrimary);
+    expect(client.updateMock).toHaveBeenCalledWith({ depends_on_task_id: 'd1' });
+  });
+
+  it('links an existing task as the dependency without creating a new one', async () => {
+    const updatedPrimary = { ...primaryTask, depends_on_task_id: 'existing-1' };
+    const client = mockClientForDependency({
+      inserts: [{ data: primaryTask, error: null }],
+      updateResult: { data: updatedPrimary, error: null },
+    });
+
+    const { data, error } = await createTaskWithDependency(
+      {
+        title: 'Write Q3 report',
+        dueDate: '2026-08-14',
+        ownerId: 'u1',
+        createdBy: 'u1',
+        dependency: {
+          mode: 'existing',
+          requiresAcceptance: true,
+          taskId: 'existing-1',
+          taskTitle: 'Legal review',
+          taskOwnerName: 'Marcus Cole',
+        },
+      },
+      client
+    );
+
+    expect(error).toBeNull();
+    expect(data).toEqual(updatedPrimary);
+    expect(client.insertMock).toHaveBeenCalledTimes(1);
+    expect(client.updateMock).toHaveBeenCalledWith({
+      depends_on_task_id: 'existing-1',
+      status: 'in-progress',
+      blocked: true,
+      blocked_reason: 'Marcus Cole — Legal review',
+    });
+  });
+
+  it('returns the primary task (unblocked) if creating the new dependency fails', async () => {
+    const client = mockClientForDependency({
+      inserts: [{ data: primaryTask, error: null }, { data: null, error: { message: 'insert failed' } }],
+      updateResult: null,
+    });
+
+    const { data, error } = await createTaskWithDependency(
+      {
+        title: 'Write Q3 report',
+        dueDate: '2026-08-14',
+        ownerId: 'u1',
+        createdBy: 'u1',
+        dependency: { mode: 'new', requiresAcceptance: true, title: 'Design sign-off', assigneeId: 'u2', assigneeName: 'David Chen' },
+      },
+      client
+    );
+
+    expect(error).toEqual({ message: 'insert failed' });
+    expect(data).toEqual(primaryTask);
+    expect(client.updateMock).not.toHaveBeenCalled();
   });
 });
 

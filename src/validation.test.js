@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { validateSignupForm, validateSigninForm, validateNewTaskForm, validateAddUserForm } from './validation.js';
+import {
+  validateSignupForm,
+  validateSigninForm,
+  validateNewTaskForm,
+  validateAddUserForm,
+  validateDependencyForm,
+} from './validation.js';
 
 describe('validateSignupForm', () => {
   const base = { name: 'David Chen', email: 'd.chen@company.com', password: 'secret1' };
@@ -90,6 +96,46 @@ describe('validateAddUserForm', () => {
   it('has no password field at all (invite flow, not self-chosen password)', () => {
     const { errors } = validateAddUserForm({ ...base, role: 'manager' });
     expect(errors.password).toBeUndefined();
+  });
+});
+
+describe('validateDependencyForm', () => {
+  const activeUserIds = ['u1', 'u2'];
+
+  it('requires an existing task selection in "existing" mode', () => {
+    const { valid, errors } = validateDependencyForm({ mode: 'existing', taskId: '' }, activeUserIds);
+    expect(valid).toBe(false);
+    expect(errors.taskId).toBeDefined();
+  });
+
+  it('accepts a valid "existing" mode selection', () => {
+    expect(validateDependencyForm({ mode: 'existing', taskId: 't1' }, activeUserIds).valid).toBe(true);
+  });
+
+  it('requires a title and assignee in "new" mode', () => {
+    const { valid, errors } = validateDependencyForm({ mode: 'new', title: '  ', assigneeId: '' }, activeUserIds);
+    expect(valid).toBe(false);
+    expect(errors.title).toBeDefined();
+    expect(errors.assigneeId).toBeDefined();
+  });
+
+  it('rejects an assignee not in the active-user list (test case 10)', () => {
+    const { valid, errors } = validateDependencyForm(
+      { mode: 'new', title: 'Design sign-off', assigneeId: 'inactive-user' },
+      activeUserIds
+    );
+    expect(valid).toBe(false);
+    expect(errors.assigneeId).toMatch(/inactive/i);
+  });
+
+  it('accepts a valid "new" mode submission with an active assignee', () => {
+    expect(
+      validateDependencyForm({ mode: 'new', title: 'Design sign-off', assigneeId: 'u2' }, activeUserIds).valid
+    ).toBe(true);
+  });
+
+  it('rejects a missing/unrecognized mode', () => {
+    expect(validateDependencyForm({ mode: '' }, activeUserIds).valid).toBe(false);
   });
 });
 

@@ -21,4 +21,8 @@ describe('getDemoUser', () => {
   it('returns the seeded employee for ?demoRole=employee', () => {
     expect(getDemoUser(true, '?demoRole=employee')).toEqual(DEMO_USERS.employee);
   });
+
+  it('returns the second seeded employee for ?demoRole=employee2 (Phase 5 two-employee flows)', () => {
+    expect(getDemoUser(true, '?demoRole=employee2')).toEqual(DEMO_USERS.employee2);
+  });
 });

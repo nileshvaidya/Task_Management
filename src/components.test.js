@@ -70,9 +70,9 @@ describe('renderTaskRow', () => {
     blocked_reason: null,
   };
 
-  function mount(task) {
+  function mount(task, viewerId) {
     const el = document.createElement('div');
-    el.innerHTML = renderTaskRow(task);
+    el.innerHTML = renderTaskRow(task, viewerId);
     return el;
   }
 
@@ -117,6 +117,50 @@ describe('renderTaskRow', () => {
   it('escapes HTML in the title', () => {
     const el = mount({ ...baseTask, title: '<img src=x onerror=alert(1)>' });
     expect(el.querySelector('img')).toBeNull();
+  });
+
+  describe('Phase 5 — Task Acceptance UI', () => {
+    const pendingTask = { ...baseTask, created_by: 'manager-1', owner_id: 'me', accepted: false };
+
+    it('shows a "Pending your acceptance" tag and an actionable checkbox for the owner viewing their own pending task', () => {
+      const el = mount(pendingTask, 'me');
+      expect(getByText(el, /pending your acceptance/i)).toBeTruthy();
+      expect(el.querySelector('[data-action="accept-task"]')).toBeTruthy();
+    });
+
+    it('shows a "Pending their acceptance" tag with no checkbox for a non-owner viewer (e.g. a manager checking a report\'s task)', () => {
+      const el = mount(pendingTask, 'manager-1');
+      expect(getByText(el, /pending their acceptance/i)).toBeTruthy();
+      expect(el.querySelector('[data-action="accept-task"]')).toBeNull();
+    });
+
+    it('hides the status select while pending acceptance', () => {
+      const el = mount(pendingTask, 'me');
+      expect(el.querySelector('[data-action="status-select"]')).toBeNull();
+    });
+
+    it('disables the round completion toggle while pending acceptance (test case 8)', () => {
+      const el = mount(pendingTask, 'me');
+      const toggle = el.querySelector('[data-action="toggle-done"]');
+      expect(toggle.hasAttribute('disabled')).toBe(true);
+    });
+
+    it('shows the normal status select once accepted=true, even for a cross-assigned task', () => {
+      const el = mount({ ...pendingTask, accepted: true }, 'me');
+      expect(el.querySelector('[data-action="status-select"]')).toBeTruthy();
+      expect(el.querySelector('[data-action="accept-task"]')).toBeNull();
+    });
+
+    it('shows the normal status select for a self-owned task (created_by === owner_id) regardless of accepted', () => {
+      const el = mount({ ...baseTask, created_by: 'me', owner_id: 'me', accepted: null }, 'me');
+      expect(el.querySelector('[data-action="status-select"]')).toBeTruthy();
+    });
+
+    it('treats a task with no created_by/owner_id fields at all as a normal (non-pending) row — backward compatible with pre-Phase-5 fixtures', () => {
+      const el = mount(baseTask, 'me');
+      expect(el.querySelector('[data-action="status-select"]')).toBeTruthy();
+      expect(el.querySelector('[data-action="accept-task"]')).toBeNull();
+    });
   });
 });
 
