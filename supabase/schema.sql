@@ -600,6 +600,22 @@ create policy "Users can insert tasks for active users"
     and (owner_id = auth.uid() or public.is_active_user(owner_id))
   );
 
+-- INSERT ... RETURNING (what every insert().select() call does) also
+-- requires the inserted row to pass a SELECT policy, not just the INSERT
+-- policy's WITH CHECK — a Postgres RLS detail easy to miss, caught only
+-- once scripts/test-rls-dependencies.mjs ran the cross-team insert for
+-- real: the WITH CHECK above now allows it, but none of the existing
+-- SELECT policies (owner / manager-of-owner / same-team) grant the
+-- creator visibility into a task they just created for someone on a
+-- different team, so the RETURNING row failed RLS with the exact same
+-- 42501 error as the original bug. A creator can always see what they
+-- created, regardless of who it's assigned to.
+drop policy if exists "Creators can view tasks they created" on public.tasks;
+create policy "Creators can view tasks they created"
+  on public.tasks for select
+  to authenticated
+  using (created_by = auth.uid());
+
 -- Auto-unblock (Phase 5 test case 9): when a task is marked completed,
 -- clear blocked/blocked_reason on every task that depends on it, and log
 -- an 'unblocked' activity entry for each one's owner. security definer so
