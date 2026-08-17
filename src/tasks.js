@@ -254,3 +254,19 @@ export async function toggleTaskDone(task, actorId, client = supabase) {
   const nextStatus = task.status === 'completed' ? 'planned' : 'completed';
   return setTaskStatus(task.id, nextStatus, actorId, client);
 }
+
+/**
+ * Deletes a task outright — allowed for the task's own owner, or (Phase 9)
+ * a manager deleting one of their direct reports' tasks, per the "Owners
+ * can delete own tasks" / "Managers can delete reports' tasks" RLS
+ * policies in schema.sql. No activity_log entry: a delete removes the row
+ * a feed entry would otherwise link to (activity_log.task_id already goes
+ * null on delete), so there's nothing left for one to point at.
+ * @param {string} taskId
+ * @param {any} [client]
+ */
+export async function deleteTask(taskId, client = supabase) {
+  if (!client) return { error: { message: 'Supabase is not configured.' } };
+  const { error } = await client.from('tasks').delete().eq('id', taskId);
+  return { error };
+}

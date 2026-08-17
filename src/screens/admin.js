@@ -11,6 +11,7 @@ import { renderShell } from '../layout.js';
 import { escapeHtml, initials, renderListSkeleton, renderErrorState } from '../components.js';
 import { createStore } from '../state.js';
 import { fetchAdminUsers, fetchAdminTasks, setUserStatus, softDeleteUser, overrideTask } from '../admin.js';
+import { fetchProjects, createProject } from '../projects.js';
 import { filterUsers } from '../adminFilter.js';
 import { formatRelativeTime } from '../dateUtils.js';
 import { open as openAddUserDialog } from '../dialogs/addUserDialog.js';
@@ -34,18 +35,21 @@ export async function render(container) {
   const store = createStore({
     users: [],
     tasks: [],
+    projects: [],
     loading: true,
     loadError: false,
     search: '',
     confirmDeleteId: null,
     overrideTaskId: null,
     actionError: '',
+    newProjectName: '',
+    projectError: '',
   });
 
   async function loadData() {
     try {
-      const [users, tasks] = await Promise.all([fetchAdminUsers(), fetchAdminTasks()]);
-      store.setState({ users, tasks, loading: false, loadError: false });
+      const [users, tasks, projects] = await Promise.all([fetchAdminUsers(), fetchAdminTasks(), fetchProjects()]);
+      store.setState({ users, tasks, projects, loading: false, loadError: false });
     } catch {
       store.setState({ loading: false, loadError: true });
     }
@@ -111,7 +115,7 @@ export function renderContent(content, state, currentUserId) {
       </div>
     </div>
 
-    <div class="card elev-sm p-5">
+    <div class="card elev-sm p-5 mb-5">
       <div class="card-title mb-3.5">Global Task Control</div>
       <div style="overflow-x:auto">
         <table class="table">
@@ -128,6 +132,31 @@ export function renderContent(content, state, currentUserId) {
             }
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <div class="card elev-sm p-5" data-role="projects-card">
+      <div class="card-title mb-3.5">Projects</div>
+      <p class="text-neutral-400 text-sm mb-3.5" style="margin-top:-8px">Create a project here to make it available in every New Task dialog — no need to be creating a task at the same time.</p>
+      <form data-form="add-project" class="flex gap-2.5 mb-3.5">
+        <input class="input" data-role="new-project-name" placeholder="Project name" value="${escapeHtml(state.newProjectName)}" style="flex:1;max-width:280px" />
+        <button type="submit" class="btn btn-primary">Add Project</button>
+      </form>
+      ${
+        state.projectError
+          ? `<p data-role="project-error" class="text-sm mb-3.5" style="color:var(--color-accent-2-200);background:var(--color-accent-2-900);border:1px solid var(--color-accent-2-700);border-radius:var(--radius-md);padding:8px 12px">${escapeHtml(state.projectError)}</p>`
+          : ''
+      }
+      <div data-role="project-list">
+        ${
+          state.loading
+            ? renderListSkeleton(2)
+            : state.loadError
+              ? renderErrorState('Could not load projects.')
+              : state.projects.length === 0
+                ? `<p class="text-muted text-sm">No projects yet.</p>`
+                : `<div style="display:flex;flex-wrap:wrap;gap:8px">${state.projects.map((p) => `<span class="tag tag-neutral">${escapeHtml(p.name)}</span>`).join('')}</div>`
+        }
       </div>
     </div>
   `;
@@ -269,6 +298,27 @@ function wireEvents(content, store, loadData) {
       const { error } = await overrideTask(taskId, status, ownerId);
       store.setState({ overrideTaskId: null, actionError: error ? error.message : '' });
       await loadData();
+    });
+  });
+
+  const addProjectForm = content.querySelector('[data-form="add-project"]');
+  const newProjectInput = content.querySelector('[data-role="new-project-name"]');
+  newProjectInput?.addEventListener('input', () => {
+    store.setState({ newProjectName: newProjectInput.value });
+  });
+  addProjectForm?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const name = newProjectInput.value.trim();
+    if (!name) return;
+    const { data, error } = await createProject(name);
+    if (error) {
+      store.setState({ projectError: error.message });
+      return;
+    }
+    store.setState({
+      projects: [...store.getState().projects, data],
+      newProjectName: '',
+      projectError: '',
     });
   });
 }

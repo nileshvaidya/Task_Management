@@ -72,9 +72,9 @@ describe('renderTaskRow', () => {
     blocked_reason: null,
   };
 
-  function mount(task, viewerId) {
+  function mount(task, viewerId, options) {
     const el = document.createElement('div');
-    el.innerHTML = renderTaskRow(task, viewerId);
+    el.innerHTML = renderTaskRow(task, viewerId, options);
     return el;
   }
 
@@ -162,6 +162,29 @@ describe('renderTaskRow', () => {
       const el = mount(baseTask, 'me');
       expect(el.querySelector('[data-action="status-select"]')).toBeTruthy();
       expect(el.querySelector('[data-action="accept-task"]')).toBeNull();
+    });
+  });
+
+  describe('Phase 9 — delete action', () => {
+    it('shows no delete button by default (canDelete omitted)', () => {
+      const el = mount(baseTask, 'me');
+      expect(el.querySelector('[data-action="delete-task"]')).toBeNull();
+    });
+
+    it('shows a delete button when canDelete is true', () => {
+      const el = mount(baseTask, 'me', { canDelete: true });
+      const btn = el.querySelector('[data-action="delete-task"]');
+      expect(btn).toBeTruthy();
+      expect(btn.getAttribute('data-task-id')).toBe('t1');
+    });
+
+    it('shows an inline confirm/cancel pair instead of the delete button when confirmingDelete is true', () => {
+      const el = mount(baseTask, 'me', { canDelete: true, confirmingDelete: true });
+      expect(el.querySelector('[data-action="delete-task"]')).toBeNull();
+      const confirmBtn = el.querySelector('[data-action="confirm-delete-task"]');
+      expect(confirmBtn).toBeTruthy();
+      expect(confirmBtn.getAttribute('data-task-id')).toBe('t1');
+      expect(el.querySelector('[data-action="cancel-delete-task"]')).toBeTruthy();
     });
   });
 });

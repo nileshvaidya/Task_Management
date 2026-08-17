@@ -16,7 +16,7 @@ acceptance workflow. Built to the "Nocturne" dark-theme design system.
 
 This project is being built in phases per the build brief; see
 `CHANGELOG.md` for what's shipped and `TEST_REPORT.md` for test results per
-phase. **Current status: Phase 6 (the brief's production go-live gate) complete, plus one item from Phase 7's optional list — CSV/PDF export of team task history — and an in-app Help manual.** See `DEPLOYMENT.md` for environment separation, secrets, and the rollback plan.
+phase. **Current status: Phase 6 (the brief's production go-live gate) complete, plus one item from Phase 7's optional list — CSV/PDF export of team task history — an in-app Help manual, and standalone project creation / manager task deletion / brand refresh (Phase 9).** See `DEPLOYMENT.md` for environment separation, secrets, and the rollback plan.
 
 ## Project layout
 
@@ -61,6 +61,7 @@ scripts/
   test-rls-admin.mjs          # RPC integration tests for the Phase 4 admin functions
   test-rls-dependencies.mjs    # RLS/RPC integration tests for Phase 5 dependencies & acceptance
   capture-help-screenshots.mjs  # one-off Playwright script that captures public/help/screenshots/ against demo mode
+  generate-icons.mjs            # one-off Playwright script that rasterizes the checklist glyph into public/icons/*.png
 supabase/
   schema.sql               # users + tasks/projects + activity_log tables, RLS policies, team_root()/team_member_ids(), admin RPCs, Phase 5 dependency/acceptance triggers + RPCs
   functions/

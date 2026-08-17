@@ -1,5 +1,28 @@
 # Test Report
 
+## Phase 9 — Project Independence, Task Deletion, Brand Refresh
+
+Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`. Four direct user requests, not build-brief phase items.
+
+| # | Test case | Result | Notes |
+|---|---|---|---|
+| 1 | A manager can create a project directly from Admin, without opening the New Task dialog | ✅ | E2E: `phase9.spec.js` — fills the Projects card's form, submits, the new project appears in the list; asserts no `[data-dialog="new-task"]` was ever opened. |
+| 2 | A manager can delete their own task | ✅ | E2E + unit: inline delete icon → "Delete?" confirm → `deleteTask` called → row removed. Unit covers `deleteTask` itself (success, RLS rejection, demo-mode no-op) and `renderTaskRow`'s `canDelete`/`confirmingDelete` options directly. |
+| 3 | A manager can delete a direct report's task (from the "My Team" filter) | ✅ | E2E: `phase9.spec.js` — same flow, task owned by a different user. RLS policy itself ("Managers can delete reports' tasks") is additive to the existing owner-only policy; deep authorization (can a manager delete a *non*-report's task) is for a future `scripts/test-rls-*.mjs` script against a real Supabase project — out of scope for a mocked browser. |
+| 4 | An employee sees no delete action on any task, including their own | ✅ | E2E + unit: `dashboard.test.js` asserts `canDelete` is false for a non-manager viewer regardless of ownership. |
+| 5 | Deleting a task another task depends on doesn't fail with a foreign-key error, and clears the dependent's blocked state | ⚠️ manual | Fixed via `ON DELETE SET NULL` + a `BEFORE DELETE` trigger (`clear_blocks_on_dependency_deleted`) in `schema.sql`; verified by reading the trigger's firing order against the FK's own internal `SET NULL` action, not by a mocked-browser e2e test (that needs a real Postgres instance — a future `test-rls-*.mjs` candidate, same as items above). |
+| 6 | The app's icon (manifest + in-app logo) reads as a checklist ("list with checkbox items") | ✅ manual + E2E | `scripts/generate-icons.mjs` regenerates the three PNGs deterministically from one glyph definition; `phase9.spec.js` asserts the regenerated files are served with the right content-type. The visual result itself was checked by rendering the generated PNG, not an automated pixel test. |
+| 7 | The company name "ASK Info-Solutions LLP" is visible in the app | ✅ | E2E: `phase9.spec.js` — visible on the login screen and in the signed-in sidebar; also checked `index.html`'s `<title>` and the manifest `description` by reading the built output directly. |
+
+### Regression check
+
+Adding a third `Promise.all` member (`fetchProjects`) to Admin's `loadData` meant every existing Phase 4/6 e2e test exercising that screen needed a `/rest/v1/projects` mock too, or the newly-added unmocked call would reject the whole `Promise.all`. Caught by re-running the full suite (not by inspection) — see CHANGELOG for the exact fix. `admin.test.js`'s loading/error-state assertions were updated from "2 lists" to "3 lists" for the same reason.
+
+### Known items carried forward (not blockers)
+
+- Carried from Phase 0-8: `npm audit` dev-tooling advisories (deferred, breaking Vite major bump); `.lighthouserc.json` doesn't audit `/help`.
+- The Help manual's Admin screenshot (`public/help/screenshots/09-admin-user-management.png`) predates the new Projects card and won't show it until `scripts/capture-help-screenshots.mjs` is re-run — cosmetic staleness, not a functional gap (the manual's text doesn't claim to cover it either).
+
 ## Help Manual
 
 Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`. User-requested feature (not a build-brief phase item): an illustrated, click-by-click Help manual accessible from the app's nav.

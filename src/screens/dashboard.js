@@ -5,7 +5,7 @@ import { getCurrentProfile } from '../auth.js';
 import { renderShell } from '../layout.js';
 import { renderTaskRow, renderListSkeleton, renderErrorState, escapeHtml } from '../components.js';
 import { createStore } from '../state.js';
-import { fetchMyTasks, fetchTeamTasks, createTask, setTaskStatus, toggleTaskDone, acceptTask } from '../tasks.js';
+import { fetchMyTasks, fetchTeamTasks, createTask, setTaskStatus, toggleTaskDone, acceptTask, deleteTask } from '../tasks.js';
 import { computeWeeklyProgress } from '../taskStats.js';
 import { todayISODate, buildCalendarCells } from '../dateUtils.js';
 
@@ -33,6 +33,7 @@ export async function render(container) {
     quickAddValue: '',
     calMonth: now.getMonth(),
     calYear: now.getFullYear(),
+    confirmDeleteTaskId: null,
   });
 
   async function loadTasks() {
@@ -118,7 +119,14 @@ export function renderContent(content, state, user) {
                   ? renderErrorState('Could not load your tasks.')
                   : visibleTasks.length === 0
                     ? `<p class="text-neutral-500 text-sm py-4">No tasks here.</p>`
-                    : visibleTasks.map((t) => renderTaskRow(t, user.id)).join('')
+                    : visibleTasks
+                        .map((t) =>
+                          renderTaskRow(t, user.id, {
+                            canDelete: user.role === 'manager',
+                            confirmingDelete: state.confirmDeleteTaskId === t.id,
+                          })
+                        )
+                        .join('')
             }
           </div>
         </div>
@@ -216,6 +224,25 @@ function wireEvents(content, store, user, loadTasks) {
     checkbox.addEventListener('change', async () => {
       const id = checkbox.getAttribute('data-task-id');
       await acceptTask(id, user.id);
+      await loadTasks();
+    });
+  });
+
+  content.querySelectorAll('[data-action="delete-task"]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      store.setState({ confirmDeleteTaskId: btn.getAttribute('data-task-id') });
+    });
+  });
+
+  content.querySelectorAll('[data-action="cancel-delete-task"]').forEach((btn) => {
+    btn.addEventListener('click', () => store.setState({ confirmDeleteTaskId: null }));
+  });
+
+  content.querySelectorAll('[data-action="confirm-delete-task"]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const id = btn.getAttribute('data-task-id');
+      await deleteTask(id);
+      store.setState({ confirmDeleteTaskId: null });
       await loadTasks();
     });
   });

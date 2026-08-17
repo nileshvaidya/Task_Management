@@ -63,6 +63,13 @@ vi.mock('./users.js', () => ({
   fetchTeamMembers: vi.fn(async () => []),
 }));
 
+// admin.js (Phase 9) also fetches projects for its standalone Projects
+// card — same network-independence concern as tasks.js/admin.js above.
+vi.mock('./projects.js', () => ({
+  fetchProjects: vi.fn(async () => []),
+  createProject: vi.fn(),
+}));
+
 describe('normalizePath', () => {
   it('maps known hashes to their route', () => {
     expect(normalizePath('#/dashboard')).toBe('/dashboard');

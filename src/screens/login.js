@@ -13,7 +13,20 @@ export async function render(container) {
   container.innerHTML = `
     <div class="min-h-screen flex items-center justify-center p-4" data-screen="login">
       <div class="card elev-md" style="width:min(400px,100%)">
-        <div class="card-kicker">WorkSync</div>
+        <div class="flex items-center gap-2 mb-1">
+          <svg width="18" height="18" viewBox="0 0 256 256" fill="none">
+            <rect x="20" y="20" width="52" height="52" rx="12" fill="none" stroke="var(--color-accent)" stroke-width="16"/>
+            <path d="M30 48 L44 62 L64 30" stroke="var(--color-accent)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <rect x="96" y="36" width="140" height="20" rx="10" fill="var(--color-accent)"/>
+            <rect x="20" y="102" width="52" height="52" rx="12" fill="none" stroke="var(--color-accent)" stroke-width="16"/>
+            <path d="M30 130 L44 144 L64 112" stroke="var(--color-accent)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <rect x="96" y="118" width="140" height="20" rx="10" fill="var(--color-accent)"/>
+            <rect x="20" y="184" width="52" height="52" rx="12" fill="none" stroke="var(--color-accent)" stroke-width="16" opacity="0.45"/>
+            <rect x="96" y="200" width="140" height="20" rx="10" fill="var(--color-accent)" opacity="0.45"/>
+          </svg>
+          <div class="card-kicker" style="margin:0">WorkSync</div>
+        </div>
+        <p style="font-size:12px;color:var(--color-neutral-500);margin:0 0 16px">by ASK Info-Solutions LLP</p>
 
         <div class="seg" role="radiogroup" aria-label="Sign in or sign up" style="margin-bottom:16px">
           <label class="seg-opt"><input type="radio" name="auth-tab" value="signin" checked />Sign In</label>
