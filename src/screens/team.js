@@ -19,6 +19,7 @@ import { fetchAllTeamTasks } from '../tasks.js';
 import { fetchTeamMembers } from '../users.js';
 import { computeTeamPulse, computeBlockers, computeTodaysFocus } from '../teamStats.js';
 import { todayISODate } from '../dateUtils.js';
+import { downloadTeamTaskReportCSV, downloadTeamTaskReportPDF } from '../reportDownload.js';
 
 export async function render(container) {
   const user = await getCurrentProfile();
@@ -69,9 +70,15 @@ export function renderContent(content, state) {
         <h1 class="text-2xl font-heading mb-1">Team Feed</h1>
         <p class="text-neutral-400 m-0">Live updates and progress across your team.</p>
       </div>
-      <div class="seg" role="radiogroup" aria-label="Team screen tab">
-        <label class="seg-opt"><input type="radio" name="team-tab" value="feed" ${state.tab === 'feed' ? 'checked' : ''} />Activity Feed</label>
-        <label class="seg-opt"><input type="radio" name="team-tab" value="overview" ${state.tab === 'overview' ? 'checked' : ''} />Team Overview</label>
+      <div class="flex items-center gap-3 flex-wrap">
+        <div class="seg" role="radiogroup" aria-label="Team screen tab">
+          <label class="seg-opt"><input type="radio" name="team-tab" value="feed" ${state.tab === 'feed' ? 'checked' : ''} />Activity Feed</label>
+          <label class="seg-opt"><input type="radio" name="team-tab" value="overview" ${state.tab === 'overview' ? 'checked' : ''} />Team Overview</label>
+        </div>
+        <div class="flex items-center gap-2">
+          <button type="button" class="btn btn-secondary" data-action="export-csv" ${state.loading || state.error ? 'disabled' : ''} style="padding:7px 12px;font-size:13px">Export CSV</button>
+          <button type="button" class="btn btn-secondary" data-action="export-pdf" ${state.loading || state.error ? 'disabled' : ''} style="padding:7px 12px;font-size:13px">Export PDF</button>
+        </div>
       </div>
     </div>
 
@@ -155,4 +162,16 @@ function wireEvents(content, store, loadData) {
   });
 
   content.querySelector('[data-action="retry"]')?.addEventListener('click', () => loadData());
+
+  content.querySelector('[data-action="export-csv"]')?.addEventListener('click', () => {
+    const { teamTasks, teamMembers } = store.getState();
+    downloadTeamTaskReportCSV(teamTasks, teamMembers);
+  });
+
+  content.querySelector('[data-action="export-pdf"]')?.addEventListener('click', () => {
+    const { teamTasks, teamMembers } = store.getState();
+    downloadTeamTaskReportPDF(teamTasks, teamMembers).catch((err) => {
+      console.error('PDF export failed:', err);
+    });
+  });
 }

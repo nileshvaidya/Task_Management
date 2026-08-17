@@ -1,5 +1,20 @@
 # Test Report
 
+## Phase 7 — Reporting / Export
+
+Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`. Optional item from the brief's "Optional/Future" list (§Phase 7) — the user picked CSV/PDF export of team task history over notifications/multi-level org hierarchy/light mode.
+
+| # | Test case | Result | Notes |
+|---|---|---|---|
+| 1 | Export CSV downloads a CSV of the team's task history with correct columns/values | ✅ | Unit: `reportExport.test.js` (row-building + CSV serialization, 12 cases). E2E: `phase7.spec.js` downloads the real file, checks the header row and values, including a comma-containing title round-tripping correctly quoted. |
+| 2 | Export PDF downloads a PDF of the team's task history | ✅ | `reportDownload.test.js` (generation succeeds against real jsPDF/jspdf-autotable, including an empty-list case). E2E: real download event, correct filename. |
+| 3 | Export buttons reflect load state — disabled while loading or on error, since there's nothing to export yet | ✅ | Unit: `team.test.js`. E2E: `phase7.spec.js`'s delayed-route test. |
+| 4 | Adding PDF export doesn't regress Team screen load performance | ✅ | `jsPDF` pulls in `html2canvas`+`dompurify`, which bloated the Team screen's own JS chunk to ~428KB (140KB gzipped) when imported eagerly — caught by comparing `npm run build` output, not a test. Fixed via dynamic `import()` inside `downloadTeamTaskReportPDF`, confirmed by `npm run build` (chunk back to ~7KB) and `npm run lighthouse` (Team screen performance/accessibility unchanged from Phase 6: 0.90/1.0). |
+
+### Known items carried forward (not blockers)
+
+- Carried from Phase 0-6: `npm audit` dev-tooling advisories (deferred, breaking Vite major bump).
+
 ## Phase 6 — Polish, Accessibility, PWA & Deployment Hardening
 
 Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`. Lighthouse: `npm run lighthouse` (needs a demo-mode build first — see `.github/workflows/ci.yml`'s `lighthouse` job for the exact env vars; needs a local Chrome/Chromium, set `CHROME_PATH` if it's not on `PATH`). This is the brief's own production go-live gate.

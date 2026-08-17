@@ -1,5 +1,15 @@
 # Changelog
 
+## Phase 7 — Reporting / Export
+
+One item picked from the brief's "Optional/Future" wishlist (the user chose this over notifications, multi-level org hierarchy, and light mode — the last of which the brief itself blocks pending design tokens that don't exist yet): CSV/PDF export of a team's task history, from the Team screen.
+
+- **`src/reportExport.js`** (new, pure functions): `buildTaskReportRows(tasks, membersById)` resolves owner names and maps status/priority to display labels (a blocked task always shows "Blocked" as its status, regardless of the underlying `status` field, matching how the rest of the UI already treats `blocked`); `tasksToCSV(rows)` serializes to RFC 4180 CSV (quotes/escapes fields containing a comma, quote, or newline); `toReportTableBody`/`REPORT_TABLE_HEAD` shape the same rows for `jspdf-autotable`. Unit-tested directly (12 cases) — no DOM, no PDF library involved, same pattern as `teamStats.js`'s pure calculations.
+- **`src/reportDownload.js`** (new): the impure half — actually triggering a download. CSV via `Blob` + a temporary `<a download>` link; PDF via `jsPDF` + `jspdf-autotable`.
+- **Team screen**: "Export CSV" / "Export PDF" buttons next to the Activity Feed / Team Overview tab switcher, exporting whatever's currently loaded in `teamTasks`/`teamMembers` — no extra network round trip. Disabled while loading or on a load error (nothing to export yet).
+- **Bug avoided, not just fixed**: `jsPDF` pulls in `html2canvas` + `dompurify` as transitive dependencies — eagerly importing it at module top level bloated the Team screen's own JS chunk from ~7KB to ~428KB (140KB gzipped), a real cost paid on every Team screen visit for a feature most visits never use. Caught by comparing `npm run build` output before/after adding the import, not by any test. Fixed by dynamically `import()`-ing `jspdf`/`jspdf-autotable` inside `downloadTeamTaskReportPDF` itself, giving it its own on-demand chunk fetched only when "Export PDF" is actually clicked — confirmed via `npm run build` (Team chunk back to ~7KB) and `npm run lighthouse` (Team screen's performance/accessibility scores unchanged from Phase 6, 0.90/1.0).
+- E2E (`e2e/phase7.spec.js`): clicking each button and asserting on the real `download` event — filename, and for CSV, spot-checking the header row and a comma-containing title round-trips correctly quoted.
+
 ## Phase 6 — Polish, Accessibility, PWA & Deployment Hardening
 
 The brief's own production go-live gate. No new features — every change here is either making an existing flow correctly show loading/empty/error states, making it keyboard-operable, or hardening the deploy story around what already exists.
