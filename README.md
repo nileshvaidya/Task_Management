@@ -16,7 +16,7 @@ acceptance workflow. Built to the "Nocturne" dark-theme design system.
 
 This project is being built in phases per the build brief; see
 `CHANGELOG.md` for what's shipped and `TEST_REPORT.md` for test results per
-phase. **Current status: Phase 6 (the brief's production go-live gate) complete, plus one item from Phase 7's optional list — CSV/PDF export of team task history.** See `DEPLOYMENT.md` for environment separation, secrets, and the rollback plan.
+phase. **Current status: Phase 6 (the brief's production go-live gate) complete, plus one item from Phase 7's optional list — CSV/PDF export of team task history — an in-app Help manual, and standalone project creation / manager task deletion / brand refresh (Phase 9).** See `DEPLOYMENT.md` for environment separation, secrets, and the rollback plan.
 
 ## Project layout
 
@@ -45,12 +45,14 @@ src/
   teamStats.js                             # pure calculations (team pulse, blockers, today's focus)
   layout.js                                 # shared app shell (desktop sidebar / mobile top bar+tabs)
   components.js                              # shared render helpers (escapeHtml, renderIdentityBlock, renderTaskRow incl. Task Acceptance UI, renderActivityCard, renderMemberCard, renderListSkeleton/renderErrorState)
-  screens/                                    # dashboard.js, team.js, admin.js, login.js — renderContent exported from each for direct async-state unit tests
+  screens/                                    # dashboard.js, team.js, admin.js, login.js, help.js — renderContent/renderHelp exported from each for direct unit tests
   dialogs/                                     # newTaskDialog.js (full: Project/Priority/Assign To/Dependencies), addUserDialog.js
   styles/
     tailwind-base.css                            # @tailwind base
     nocturne.css                                  # ported verbatim from design-reference/ (+ .wsswitch, see CHANGELOG)
     tailwind-components-utilities.css              # @tailwind components/utilities
+public/
+  help/screenshots/        # real screenshots embedded in the in-app Help manual (src/screens/help.js)
 scripts/
   seed.js                 # demo user seeding (Sarah Jenkins/manager, David Chen + Marcus Cole/employees)
   test-rls-users.mjs       # RLS integration tests for the users table
@@ -58,6 +60,8 @@ scripts/
   test-rls-team.mjs          # RLS integration tests for team scoping (activity_log, team tasks/profiles)
   test-rls-admin.mjs          # RPC integration tests for the Phase 4 admin functions
   test-rls-dependencies.mjs    # RLS/RPC integration tests for Phase 5 dependencies & acceptance
+  capture-help-screenshots.mjs  # one-off Playwright script that captures public/help/screenshots/ against demo mode
+  generate-icons.mjs            # one-off Playwright script that rasterizes the checklist glyph into public/icons/*.png
 supabase/
   schema.sql               # users + tasks/projects + activity_log tables, RLS policies, team_root()/team_member_ids(), admin RPCs, Phase 5 dependency/acceptance triggers + RPCs
   functions/

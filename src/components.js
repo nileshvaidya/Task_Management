@@ -72,8 +72,13 @@ const STATUS_TAG_CLASS = { planned: 'tag-neutral', 'in-progress': 'tag-outline',
  * task) sees the tag as informational only.
  * @param {{ id: string, title: string, status: string, due_date: string, blocked: boolean, blocked_reason: string|null, created_by?: string, owner_id?: string, accepted?: boolean|null }} task
  * @param {string} [viewerId] the signed-in user looking at this row
+ * @param {{ canDelete?: boolean, confirmingDelete?: boolean }} [options] canDelete (Phase 9): the
+ *   viewer may delete this task (their own, or — for a manager — a direct report's); the calling
+ *   screen decides this per its own scoping, since renderTaskRow has no team-membership data of its
+ *   own. confirmingDelete: this row is mid inline "delete this task?" confirmation.
  */
-export function renderTaskRow(task, viewerId) {
+export function renderTaskRow(task, viewerId, options = {}) {
+  const { canDelete = false, confirmingDelete = false } = options;
   const done = task.status === 'completed';
   const pendingAcceptance = task.created_by != null && task.created_by !== task.owner_id && task.accepted === false;
   const isOwner = task.owner_id === viewerId;
@@ -104,6 +109,17 @@ export function renderTaskRow(task, viewerId) {
         <span class="tag ${tagClass}">${statusLabel}</span>
       </div>`;
 
+  const deleteControls = !canDelete
+    ? ''
+    : confirmingDelete
+      ? `
+        <div style="display:flex;align-items:center;gap:6px;flex:none">
+          <span style="font-size:11px;color:var(--color-accent-2-200)">Delete?</span>
+          <button type="button" class="wsicon-btn" data-action="confirm-delete-task" data-task-id="${escapeHtml(task.id)}" aria-label="Confirm delete task" title="Confirm delete" style="width:26px;height:26px;border-radius:var(--radius-sm);border:1px solid var(--color-divider);background:transparent;color:var(--color-accent-2-200)">✓</button>
+          <button type="button" class="wsicon-btn" data-action="cancel-delete-task" aria-label="Cancel delete task" title="Cancel" style="width:26px;height:26px;border-radius:var(--radius-sm);border:1px solid var(--color-divider);background:transparent;color:var(--color-neutral-400)">✕</button>
+        </div>`
+      : `<button type="button" class="wsicon-btn" data-action="delete-task" data-task-id="${escapeHtml(task.id)}" aria-label="Delete task" title="Delete task" style="width:26px;height:26px;border-radius:var(--radius-sm);border:1px solid var(--color-divider);background:transparent;color:var(--color-neutral-400);flex:none">🗑</button>`;
+
   return `
     <div class="task-row" data-task-id="${escapeHtml(task.id)}" style="display:flex;flex-wrap:wrap;align-items:flex-start;gap:12px;padding:14px 0;border-top:1px solid var(--color-divider)">
       <button type="button" data-action="toggle-done" data-task-id="${escapeHtml(task.id)}" ${pendingAcceptance ? 'disabled' : ''}
@@ -121,6 +137,7 @@ export function renderTaskRow(task, viewerId) {
         }
       </div>
       ${rightControls}
+      ${deleteControls}
     </div>`;
 }
 

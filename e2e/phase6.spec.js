@@ -65,17 +65,20 @@ test.describe('Phase 6 — Dashboard async states (tasks)', () => {
   });
 });
 
-test.describe('Phase 6 — Admin screen async states (users/tasks)', () => {
-  test('shows an error state in both tables when the admin RPCs fail', async ({ page }) => {
+test.describe('Phase 6 — Admin screen async states (users/tasks/projects)', () => {
+  test('shows an error state in all three lists when the admin RPCs fail', async ({ page }) => {
     await page.route('**/rest/v1/rpc/admin_list_users', (route) =>
       route.fulfill({ status: 500, contentType: 'application/json', body: '{"message":"boom"}' })
     );
     await page.route('**/rest/v1/rpc/admin_list_tasks', (route) =>
       route.fulfill({ status: 500, contentType: 'application/json', body: '{"message":"boom"}' })
     );
+    await page.route('**/rest/v1/projects**', (route) =>
+      route.fulfill({ status: 500, contentType: 'application/json', body: '{"message":"boom"}' })
+    );
 
     await page.goto('/?demoRole=manager#/admin');
-    await expect(page.locator('[data-screen="admin"] [data-role="error-state"]')).toHaveCount(2);
+    await expect(page.locator('[data-screen="admin"] [data-role="error-state"]')).toHaveCount(3);
   });
 });
 
@@ -270,6 +273,7 @@ test.describe('Phase 6 — responsive QA across breakpoints (test case in brief 
         })
       );
       await page.route('**/rest/v1/rpc/admin_list_tasks**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
+      await page.route('**/rest/v1/projects**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
 
       await page.setViewportSize({ width: bp.width, height: bp.height });
       await page.goto('/?demoRole=manager#/admin');

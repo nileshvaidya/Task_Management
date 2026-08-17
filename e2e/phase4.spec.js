@@ -15,12 +15,18 @@ const FIXTURE_TASKS = [
   { id: 't1', title: 'Write Q3 report', owner_id: 'demo-u2', status: 'planned', blocked: false, blocked_reason: null },
 ];
 
-async function mockAdminRpcs(page, { users = FIXTURE_USERS, tasks = FIXTURE_TASKS, onRpc } = {}) {
+async function mockAdminRpcs(page, { users = FIXTURE_USERS, tasks = FIXTURE_TASKS, projects = [], onRpc } = {}) {
   await page.route('**/rest/v1/rpc/admin_list_users**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(users) })
   );
   await page.route('**/rest/v1/rpc/admin_list_tasks**', (route) =>
     route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(tasks) })
+  );
+  // Phase 9's standalone Projects card fetches this alongside users/tasks
+  // on every Admin load — unmocked, the placeholder Supabase host 403s and
+  // the shared Promise.all rejects, breaking every test in this file.
+  await page.route('**/rest/v1/projects**', (route) =>
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(projects) })
   );
   for (const fn of ['set_user_status', 'soft_delete_user', 'override_task']) {
     await page.route(`**/rest/v1/rpc/${fn}**`, (route) => {

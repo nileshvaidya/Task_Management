@@ -63,11 +63,19 @@ vi.mock('./users.js', () => ({
   fetchTeamMembers: vi.fn(async () => []),
 }));
 
+// admin.js (Phase 9) also fetches projects for its standalone Projects
+// card — same network-independence concern as tasks.js/admin.js above.
+vi.mock('./projects.js', () => ({
+  fetchProjects: vi.fn(async () => []),
+  createProject: vi.fn(),
+}));
+
 describe('normalizePath', () => {
   it('maps known hashes to their route', () => {
     expect(normalizePath('#/dashboard')).toBe('/dashboard');
     expect(normalizePath('#/team')).toBe('/team');
     expect(normalizePath('#/admin')).toBe('/admin');
+    expect(normalizePath('#/help')).toBe('/help');
   });
 
   it('falls back to the default route for unknown or empty hashes', () => {
@@ -100,6 +108,11 @@ describe('renderRoute — protected routes with a session', () => {
     expect(container.querySelector('[data-screen="admin"]')).toBeTruthy();
   });
 
+  it('mounts the help screen for #/help when signed in', async () => {
+    await renderRoute(container, '#/help', authed);
+    expect(container.querySelector('[data-screen="help"]')).toBeTruthy();
+  });
+
   it('redirects a non-manager away from #/admin instead of rendering it (Phase 4 test case 1)', async () => {
     const { getCurrentProfile } = await import('./auth.js');
     /** @type {import('vitest').Mock} */ (getCurrentProfile).mockResolvedValueOnce({
@@ -129,9 +142,10 @@ describe('renderRoute — auth guard', () => {
     expect(container.querySelector('[data-screen="login"]')).toBeTruthy();
   });
 
-  it('redirects an unauthenticated visitor away from team and admin too', async () => {
+  it('redirects an unauthenticated visitor away from team, admin, and help too', async () => {
     expect(await renderRoute(container, '#/team', anon)).toBe('/login');
     expect(await renderRoute(container, '#/admin', anon)).toBe('/login');
+    expect(await renderRoute(container, '#/help', anon)).toBe('/login');
   });
 
   it('never calls the session check for the public login route', async () => {

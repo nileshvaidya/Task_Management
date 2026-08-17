@@ -686,3 +686,63 @@ as $$
 $$;
 
 grant execute on function public.list_all_tasks_for_dependency() to authenticated;
+
+-- Phase 9: managers can delete their own tasks (already covered by "Owners
+-- can delete own tasks" above) *and* their direct reports' tasks — the
+-- Dashboard's task rows now show a delete action for managers on both the
+-- "Mine" and "My Team" filters. Postgres ORs multiple permissive policies
+-- for the same command, so this is additive: an owner-manager still
+-- qualifies via the owner policy, a manager deleting a report's task
+-- qualifies via this one, and an employee (who has neither) still can't
+-- touch anyone else's row.
+drop policy if exists "Managers can delete reports' tasks" on public.tasks;
+create policy "Managers can delete reports' tasks"
+  on public.tasks for delete
+  to authenticated
+  using (
+    owner_id in (select id from public.users where manager_id = auth.uid())
+  );
+
+-- Deleting a task can leave other tasks pointing at it via
+-- depends_on_task_id. That FK had no ON DELETE action, so before this it
+-- would have just blocked the delete outright with a foreign-key-violation
+-- error the moment a task with a dependent existed. Switched to SET NULL so
+-- the delete always succeeds, and paired with a BEFORE DELETE trigger (not
+-- AFTER — the FK's own SET NULL action is itself an internal AFTER
+-- trigger, and would already have nulled depends_on_task_id on every
+-- dependent by the time a user-defined AFTER trigger ran, leaving nothing
+-- for its WHERE clause to match) that clears the resulting stale
+-- blocked/blocked_reason, same "auto-unblock" idea as
+-- clear_dependent_blocks above but triggered by deletion instead of
+-- completion.
+alter table public.tasks drop constraint if exists tasks_depends_on_task_id_fkey;
+alter table public.tasks add constraint tasks_depends_on_task_id_fkey
+  foreign key (depends_on_task_id) references public.tasks (id) on delete set null;
+
+create or replace function public.clear_blocks_on_dependency_deleted()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  dep record;
+begin
+  for dep in
+    update public.tasks
+    set blocked = false, blocked_reason = null
+    where depends_on_task_id = old.id and blocked = true
+    returning id, owner_id, title
+  loop
+    insert into public.activity_log (actor_id, verb, task_id, detail)
+    values (dep.owner_id, 'unblocked', dep.id, dep.title || ' — no longer blocked, its dependency was deleted');
+  end loop;
+  return old;
+end;
+$$;
+
+drop trigger if exists tasks_clear_blocks_on_delete on public.tasks;
+create trigger tasks_clear_blocks_on_delete
+  before delete on public.tasks
+  for each row
+  execute function public.clear_blocks_on_dependency_deleted();

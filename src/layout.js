@@ -14,6 +14,22 @@ const NAV_ITEMS = [
   { route: '/admin', label: 'User Admin', mobileLabel: 'Admin' },
 ];
 
+// The app logo: a checklist glyph (two checked rows, one open) — matches
+// the checkbox-list icon generated for the PWA manifest by
+// scripts/generate-icons.mjs, so the in-app logo and the installed-app icon
+// read as the same mark.
+const CHECKLIST_LOGO_SVG = (size) => `
+  <svg width="${size}" height="${size}" viewBox="0 0 256 256" fill="none">
+    <rect x="20" y="20" width="52" height="52" rx="12" fill="none" stroke="var(--color-accent)" stroke-width="16"/>
+    <path d="M30 48 L44 62 L64 30" stroke="var(--color-accent)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <rect x="96" y="36" width="140" height="20" rx="10" fill="var(--color-accent)"/>
+    <rect x="20" y="102" width="52" height="52" rx="12" fill="none" stroke="var(--color-accent)" stroke-width="16"/>
+    <path d="M30 130 L44 144 L64 112" stroke="var(--color-accent)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <rect x="96" y="118" width="140" height="20" rx="10" fill="var(--color-accent)"/>
+    <rect x="20" y="184" width="52" height="52" rx="12" fill="none" stroke="var(--color-accent)" stroke-width="16" opacity="0.45"/>
+    <rect x="96" y="200" width="140" height="20" rx="10" fill="var(--color-accent)" opacity="0.45"/>
+  </svg>`;
+
 const NAV_ICONS = {
   '/dashboard':
     '<path d="M216,40H40A16,16,0,0,0,24,56V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V56A16,16,0,0,0,216,40ZM104,200H40V56h64Zm112,0H120V56h96Z"/>',
@@ -54,25 +70,28 @@ export function renderShell(container, { activeRoute, user }) {
     </style>
     <div class="min-h-screen md:flex">
       <aside class="hidden md:flex md:flex-col w-60 flex-none p-4" style="background:var(--color-surface);border-right:1px solid var(--color-divider)">
-        <div class="flex items-center gap-2 px-1.5 pb-5">
-          <svg width="20" height="20" viewBox="0 0 256 256" fill="var(--color-accent)"><path d="M216,56H176V48a24,24,0,0,0-24-24H104A24,24,0,0,0,80,48v8H40A16,16,0,0,0,24,72V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V72A16,16,0,0,0,216,56ZM96,48a8,8,0,0,1,8-8h48a8,8,0,0,1,8,8v8H96Z"/></svg>
+        <div class="flex items-center gap-2 px-1.5 pb-1">
+          ${CHECKLIST_LOGO_SVG(20)}
           <span style="font-family:var(--font-heading);font-weight:600;font-size:17px">WorkSync</span>
         </div>
+        <div class="px-1.5 pb-4" style="font-size:11px;color:var(--color-neutral-500)">ASK Info-Solutions LLP</div>
         <button type="button" class="btn btn-primary btn-block mb-4" data-action="open-new-task">+ New Task</button>
         <nav class="flex flex-col gap-1">${navHtml(false)}</nav>
         <div class="flex-1"></div>
         <button type="button" class="btn btn-secondary mb-2 ${installState.getState().available ? '' : 'hidden'}" data-action="install-app">Install App</button>
+        <a href="#/help" class="btn btn-ghost mb-2" data-nav="/help" style="text-decoration:none;text-align:center">Help</a>
         <div data-role="sidebar-identity" class="p-2 mt-3" style="border-top:1px solid var(--color-divider)"></div>
         <button type="button" class="btn btn-ghost mt-2" data-action="sign-out">Sign out</button>
       </aside>
 
       <div class="flex md:hidden items-center justify-between px-4 py-3" style="border-bottom:1px solid var(--color-divider)">
         <div class="flex items-center gap-2">
-          <svg width="18" height="18" viewBox="0 0 256 256" fill="var(--color-accent)"><path d="M216,56H176V48a24,24,0,0,0-24-24H104A24,24,0,0,0,80,48v8H40A16,16,0,0,0,24,72V200a16,16,0,0,0,16,16H216a16,16,0,0,0,16-16V72A16,16,0,0,0,216,56Z"/></svg>
+          ${CHECKLIST_LOGO_SVG(18)}
           <span style="font-family:var(--font-heading);font-weight:600;font-size:16px">WorkSync</span>
         </div>
         <div class="flex items-center gap-2">
           <button type="button" class="wsicon-btn ${installState.getState().available ? '' : 'hidden'}" data-action="install-app" aria-label="Install App" title="Install App" style="width:30px;height:30px;border-radius:var(--radius-sm);border:1px solid var(--color-divider);background:transparent;color:var(--color-neutral-400)">⭳</button>
+          <a href="#/help" class="wsicon-btn" data-nav="/help" aria-label="Help" title="Help" style="width:30px;height:30px;border-radius:var(--radius-sm);border:1px solid var(--color-divider);background:transparent;color:var(--color-neutral-400);text-decoration:none;display:flex;align-items:center;justify-content:center">?</a>
           <button type="button" class="wsicon-btn" data-action="sign-out" aria-label="Sign out" style="width:30px;height:30px;border-radius:var(--radius-sm);border:1px solid var(--color-divider);background:transparent;color:var(--color-neutral-400)">⎋</button>
           <div style="width:28px;height:28px;border-radius:50%;background:var(--color-accent-800);color:var(--color-accent-100);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">${escapeHtml(initials(user.name))}</div>
         </div>

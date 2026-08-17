@@ -10,6 +10,7 @@ import {
   fetchAssignableUsers,
   fetchDependencyCandidates,
   createTaskWithDependency,
+  deleteTask,
 } from './tasks.js';
 
 function chainable(result) {
@@ -414,5 +415,30 @@ describe('toggleTaskDone', () => {
     const client = tableRoutedClient({ tasks: { update } });
     await toggleTaskDone({ id: 't1', status: 'completed' }, 'u1', client);
     expect(update).toHaveBeenCalledWith({ status: 'planned' });
+  });
+});
+
+describe('deleteTask', () => {
+  it('deletes the task by id and returns no error on success', async () => {
+    const eq = vi.fn(() => Promise.resolve({ error: null }));
+    const del = vi.fn(() => ({ eq }));
+    const client = tableRoutedClient({ tasks: { delete: del } });
+    const { error } = await deleteTask('t1', client);
+    expect(del).toHaveBeenCalled();
+    expect(eq).toHaveBeenCalledWith('id', 't1');
+    expect(error).toBeNull();
+  });
+
+  it('surfaces an RLS rejection (e.g. an employee trying to delete a non-direct-report\'s task) as an error', async () => {
+    const eq = vi.fn(() => Promise.resolve({ error: { message: 'new row violates row-level security policy' } }));
+    const del = vi.fn(() => ({ eq }));
+    const client = tableRoutedClient({ tasks: { delete: del } });
+    const { error } = await deleteTask('t1', client);
+    expect(error).toBeTruthy();
+  });
+
+  it('returns a config error when Supabase is not configured (demo mode)', async () => {
+    const { error } = await deleteTask('t1', null);
+    expect(error).toBeTruthy();
   });
 });

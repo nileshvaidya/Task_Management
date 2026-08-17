@@ -16,6 +16,7 @@ function baseState(overrides = {}) {
     quickAddValue: '',
     calMonth: 7,
     calYear: 2026,
+    confirmDeleteTaskId: null,
     ...overrides,
   };
 }
@@ -49,5 +50,29 @@ describe('dashboard renderContent — Active Tasks async states', () => {
     const tasks = [{ id: 't1', title: 'Write report', status: 'planned', due_date: '2026-08-20', blocked: false, blocked_reason: null }];
     renderContent(content, baseState({ tasks }), user);
     expect(content.querySelector('[data-task-id="t1"]')).toBeTruthy();
+  });
+});
+
+describe('dashboard renderContent — Phase 9 task deletion', () => {
+  const tasks = [{ id: 't1', title: 'Write report', status: 'planned', due_date: '2026-08-20', blocked: false, blocked_reason: null }];
+  const manager = { id: 'u1', name: 'Sarah Jenkins', role: 'manager' };
+
+  it('shows a delete action for a manager', () => {
+    const content = document.createElement('div');
+    renderContent(content, baseState({ tasks }), manager);
+    expect(content.querySelector('[data-action="delete-task"][data-task-id="t1"]')).toBeTruthy();
+  });
+
+  it('shows no delete action for an employee', () => {
+    const content = document.createElement('div');
+    renderContent(content, baseState({ tasks }), user);
+    expect(content.querySelector('[data-action="delete-task"]')).toBeNull();
+  });
+
+  it('shows the inline confirm/cancel pair for the row being confirmed', () => {
+    const content = document.createElement('div');
+    renderContent(content, baseState({ tasks, confirmDeleteTaskId: 't1' }), manager);
+    expect(content.querySelector('[data-action="confirm-delete-task"][data-task-id="t1"]')).toBeTruthy();
+    expect(content.querySelector('[data-action="delete-task"]')).toBeNull();
   });
 });

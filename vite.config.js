@@ -8,7 +8,7 @@ export default defineConfig({
       manifest: {
         name: 'WorkSync',
         short_name: 'WorkSync',
-        description: 'Task management for small manufacturing/engineering teams.',
+        description: 'Task management for small manufacturing/engineering teams, by ASK Info-Solutions LLP.',
         theme_color: '#161826',
         background_color: '#161826',
         display: 'standalone',
