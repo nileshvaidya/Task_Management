@@ -9,9 +9,10 @@ export const routes = {
   '/dashboard': () => import('./screens/dashboard.js'),
   '/team': () => import('./screens/team.js'),
   '/admin': () => import('./screens/admin.js'),
+  '/help': () => import('./screens/help.js'),
 };
 
-export const PROTECTED_ROUTES = new Set(['/dashboard', '/team', '/admin']);
+export const PROTECTED_ROUTES = new Set(['/dashboard', '/team', '/admin', '/help']);
 export const DEFAULT_ROUTE = '/login';
 
 export function normalizePath(hash) {

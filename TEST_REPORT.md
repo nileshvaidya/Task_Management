@@ -1,5 +1,23 @@
 # Test Report
 
+## Help Manual
+
+Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`. User-requested feature (not a build-brief phase item): an illustrated, click-by-click Help manual accessible from the app's nav.
+
+| # | Test case | Result | Notes |
+|---|---|---|---|
+| 1 | Help screen is reachable from both the desktop sidebar and the mobile top bar | ✅ | E2E: `phase8.spec.js` — clicks each nav entry at its matching viewport, asserts `[data-screen="help"]` renders. |
+| 2 | `#/help` is a protected route like every other authenticated screen | ✅ | Unit: `router.test.js` (mounts for a signed-in session; redirects to `/login` for an anonymous one). E2E: `phase8.spec.js` asserts the same redirect against a real anonymous page load. |
+| 3 | Table of contents links scroll to their matching section; every section referenced actually exists | ✅ | Unit: `help.test.js` asserts every `[data-toc-link]` href resolves to a real `#id` in the rendered DOM. E2E: clicks a TOC link, asserts the target section is in the viewport. |
+| 4 | Every screenshot referenced by the manual exists on disk and actually loads in a real browser | ✅ | Unit: `help.test.js` cross-checks every `<img src>` against `readdirSync('public/help/screenshots')`. E2E: `phase8.spec.js` checks `img.complete && naturalWidth > 0` for every image on the page, no console errors. Caught and fixed a real bug — see CHANGELOG (`loading="lazy"` left 6 below-the-fold images "broken" at check time). |
+| 5 | The manual's content is accurate to the real UI and covers every major screen | ✅ | Unit: `help.test.js` asserts the rendered text mentions Dashboard, New Task, Has Dependency, Team Overview, Export CSV/PDF, Add User, Install App, and inactive-account troubleshooting. Every quoted button/field label was manually cross-checked against the real dialog source before writing. |
+| 6 | The signed-in user's name is escaped, not just interpolated, in the manual's footer | ✅ | Unit: `help.test.js` — a `<script>`-bearing name produces no `<script>` element in the rendered DOM. |
+
+### Known items carried forward (not blockers)
+
+- Carried from Phase 0-7: `npm audit` dev-tooling advisories (deferred, breaking Vite major bump).
+- `.lighthouserc.json` doesn't audit `/help` (only `/`, `/#/dashboard`, `/#/team`, `/#/admin` are scored) — not a deliberate exclusion, just not yet added to the audit list.
+
 ## Phase 7 — Reporting / Export
 
 Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`. Optional item from the brief's "Optional/Future" list (§Phase 7) — the user picked CSV/PDF export of team task history over notifications/multi-level org hierarchy/light mode.

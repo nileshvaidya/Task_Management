@@ -62,6 +62,7 @@ export function renderShell(container, { activeRoute, user }) {
         <nav class="flex flex-col gap-1">${navHtml(false)}</nav>
         <div class="flex-1"></div>
         <button type="button" class="btn btn-secondary mb-2 ${installState.getState().available ? '' : 'hidden'}" data-action="install-app">Install App</button>
+        <a href="#/help" class="btn btn-ghost mb-2" data-nav="/help" style="text-decoration:none;text-align:center">Help</a>
         <div data-role="sidebar-identity" class="p-2 mt-3" style="border-top:1px solid var(--color-divider)"></div>
         <button type="button" class="btn btn-ghost mt-2" data-action="sign-out">Sign out</button>
       </aside>
@@ -73,6 +74,7 @@ export function renderShell(container, { activeRoute, user }) {
         </div>
         <div class="flex items-center gap-2">
           <button type="button" class="wsicon-btn ${installState.getState().available ? '' : 'hidden'}" data-action="install-app" aria-label="Install App" title="Install App" style="width:30px;height:30px;border-radius:var(--radius-sm);border:1px solid var(--color-divider);background:transparent;color:var(--color-neutral-400)">⭳</button>
+          <a href="#/help" class="wsicon-btn" data-nav="/help" aria-label="Help" title="Help" style="width:30px;height:30px;border-radius:var(--radius-sm);border:1px solid var(--color-divider);background:transparent;color:var(--color-neutral-400);text-decoration:none;display:flex;align-items:center;justify-content:center">?</a>
           <button type="button" class="wsicon-btn" data-action="sign-out" aria-label="Sign out" style="width:30px;height:30px;border-radius:var(--radius-sm);border:1px solid var(--color-divider);background:transparent;color:var(--color-neutral-400)">⎋</button>
           <div style="width:28px;height:28px;border-radius:50%;background:var(--color-accent-800);color:var(--color-accent-100);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">${escapeHtml(initials(user.name))}</div>
         </div>

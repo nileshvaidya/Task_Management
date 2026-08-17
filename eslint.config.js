@@ -12,6 +12,17 @@ export default [
     },
   },
   {
+    // Test files run under Vitest, which is Node (with jsdom layered on
+    // top for browser APIs) — node globals like `process` are genuinely
+    // available here, unlike in the app code above.
+    files: ['src/**/*.test.js'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: { ...globals.browser, ...globals.es2021, ...globals.node },
+    },
+  },
+  {
     files: ['scripts/**/*.js', 'scripts/**/*.mjs', '*.config.js'],
     languageOptions: {
       ecmaVersion: 2022,
