@@ -1,5 +1,14 @@
 # Test Report
 
+## Bug fix: Admin screen text inputs lost focus on every keystroke
+
+| # | Test case | Result | Notes |
+|---|---|---|---|
+| 1 | The new-project-name field keeps focus and accumulates the full typed value across keystrokes | ✅ | E2E: `phase9.spec.js` — types via `.pressSequentially()` (real per-character `input` events, unlike `.fill()`), asserts final value and that the field is still focused. Would have failed before the fix (each keystroke re-rendered the field, losing focus, so only the first character would have landed). |
+| 2 | The User Management search field has the same fix and still filters live | ✅ | E2E: `phase4.spec.js` — same `.pressSequentially()` approach; asserts focus, value, and that the live filter still narrows the table correctly. |
+
+Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`.
+
 ## Phase 9 — Project Independence, Task Deletion, Brand Refresh
 
 Run locally: `npm run lint && npm run typecheck && npm test && npm run e2e && npm run build`. Four direct user requests, not build-brief phase items.

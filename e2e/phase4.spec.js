@@ -83,6 +83,17 @@ test.describe('Phase 4 — User Management table', () => {
     await expect(page.locator('tr[data-user-row="demo-u1"]')).toHaveCount(0);
   });
 
+  test('the search field keeps focus across keystrokes (real per-character typing, not .fill())', async ({ page }) => {
+    await mockAdminRpcs(page);
+    await page.goto('/?demoRole=manager#/admin');
+    const search = page.locator('[data-role="user-search"]');
+    await search.click();
+    await search.pressSequentially('marcus');
+    await expect(search).toHaveValue('marcus');
+    await expect(search).toBeFocused();
+    await expect(page.locator('tr[data-user-row="demo-u3"]')).toBeVisible();
+  });
+
   test('the signed-in manager\'s own row has no toggle/delete actions', async ({ page }) => {
     await mockAdminRpcs(page);
     await page.goto('/?demoRole=manager#/admin');

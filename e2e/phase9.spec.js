@@ -135,6 +135,16 @@ test.describe('Phase 9 — standalone Project creation (Admin screen)', () => {
     await page.goto('/?demoRole=manager#/admin');
     await expect(page.locator('[data-role="project-list"]')).toContainText('Q3 Planning');
   });
+
+  test('the project name field keeps focus across keystrokes (real per-character typing, not .fill())', async ({ page }) => {
+    await mockAdminScreen(page);
+    await page.goto('/?demoRole=manager#/admin');
+    const input = page.locator('[data-role="new-project-name"]');
+    await input.click();
+    await input.pressSequentially('Line 3 Expansion');
+    await expect(input).toHaveValue('Line 3 Expansion');
+    await expect(input).toBeFocused();
+  });
 });
 
 test.describe('Phase 9 — brand refresh', () => {

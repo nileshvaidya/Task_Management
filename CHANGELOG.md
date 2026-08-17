@@ -1,5 +1,11 @@
 # Changelog
 
+## Bug fix: Admin screen text inputs lost focus on every keystroke
+
+Reported directly: typing into the new-project-name field on the Admin screen (Phase 9) lost focus after each character. Root cause: `admin.js`'s `paint()` does a full `content.innerHTML` re-render on every `store.setState()` call, and the field's `input` listener called `setState` on every keystroke — each character remounted the input as a fresh DOM node, dropping focus before the next character could land. Same bug class, same fix, as the New Task dialog's Phase 6 keyboard-accessibility fix: `paint()` now captures a re-findable selector (`focusSelectorFor`) plus caret position for whatever's focused before each re-render, and restores both afterward.
+
+Also fixed the User Management search box, which had the identical bug (every keystroke pushes `search` into the store to drive the live filter, so it re-renders and remounts too) — nobody had reported it, but it shares the exact same root cause and fix, sitting one field away from the one that was reported, so it made no sense to leave it broken. Existing coverage for both fields used Playwright's `.fill()`, which sets a field's value in one shot and never exercised the character-by-character re-render — new tests in `e2e/phase4.spec.js` and `e2e/phase9.spec.js` use `.pressSequentially()` instead, which does, and would have caught this.
+
 ## Help Manual correction (post-Phase 9)
 
 PR #12 (the Help manual) merged automatically as a side effect of merging Phase 9's PR #13 — its branch head commit was already an ancestor of Phase 9's branch, so GitHub detected it as merged the moment #13 landed, before the planned screenshot refresh could go in as part of that same PR. This is that refresh, as a fast follow-up: re-ran `scripts/capture-help-screenshots.mjs` against the post-Phase-9 UI so all 11 screenshots in `public/help/screenshots/` show the checklist icon, the "ASK Info-Solutions LLP" branding, and (for the Admin screenshots) the new Projects card, instead of the pre-Phase-9 look. No code changes — screenshots only.
