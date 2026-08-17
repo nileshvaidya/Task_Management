@@ -1,6 +1,10 @@
 // Task CRUD data layer. Mirrors auth.js's shape (injectable client, plain
-// return values, no throwing on expected failure paths) for the same
-// testability reasons.
+// return values) for mutations — but the fetch* functions below throw on a
+// real query error rather than swallowing it into an empty array, so a
+// screen's loader can distinguish "genuinely no rows" from "the request
+// failed" and render an error state instead of a silent empty list (Phase
+// 6). `!client` (demo mode / unconfigured) is not an error and still
+// returns [].
 import { supabase } from './api.js';
 import { logActivity } from './activity.js';
 
@@ -12,7 +16,7 @@ export async function fetchMyTasks(ownerId, client = supabase) {
     .select('*')
     .eq('owner_id', ownerId)
     .order('due_date', { ascending: true });
-  if (error) return [];
+  if (error) throw error;
   return data;
 }
 
@@ -29,7 +33,8 @@ export async function fetchTeamTasks(managerId, client = supabase) {
     .from('users')
     .select('id')
     .eq('manager_id', managerId);
-  if (reportsError || !reports || reports.length === 0) return [];
+  if (reportsError) throw reportsError;
+  if (!reports || reports.length === 0) return [];
 
   const reportIds = reports.map((r) => r.id);
   const { data, error } = await client
@@ -37,7 +42,7 @@ export async function fetchTeamTasks(managerId, client = supabase) {
     .select('*')
     .in('owner_id', reportIds)
     .order('due_date', { ascending: true });
-  if (error) return [];
+  if (error) throw error;
   return data;
 }
 
@@ -53,14 +58,15 @@ export async function fetchTeamTasks(managerId, client = supabase) {
 export async function fetchAllTeamTasks(callerId, client = supabase) {
   if (!client) return [];
   const { data: ids, error: idsError } = await client.rpc('team_member_ids', { uid: callerId });
-  if (idsError || !ids || ids.length === 0) return [];
+  if (idsError) throw idsError;
+  if (!ids || ids.length === 0) return [];
 
   const { data, error } = await client
     .from('tasks')
     .select('*')
     .in('owner_id', ids)
     .order('due_date', { ascending: true });
-  if (error) return [];
+  if (error) throw error;
   return data;
 }
 
@@ -121,7 +127,7 @@ export async function acceptTask(taskId, actorId, client = supabase) {
 export async function fetchAssignableUsers(client = supabase) {
   if (!client) return [];
   const { data, error } = await client.rpc('list_assignable_users');
-  if (error) return [];
+  if (error) throw error;
   return data;
 }
 
@@ -134,7 +140,7 @@ export async function fetchAssignableUsers(client = supabase) {
 export async function fetchDependencyCandidates(client = supabase) {
   if (!client) return [];
   const { data, error } = await client.rpc('list_all_tasks_for_dependency');
-  if (error) return [];
+  if (error) throw error;
   return data;
 }
 

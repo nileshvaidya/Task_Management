@@ -30,6 +30,6 @@ export async function fetchTeamActivity(client = supabase) {
     .select('*, actor:actor_id(name)')
     .order('created_at', { ascending: false })
     .limit(50);
-  if (error) return [];
+  if (error) throw error;
   return data;
 }

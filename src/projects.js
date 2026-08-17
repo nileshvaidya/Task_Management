@@ -7,7 +7,7 @@ import { supabase } from './api.js';
 export async function fetchProjects(client = supabase) {
   if (!client) return [];
   const { data, error } = await client.from('projects').select('*').order('name');
-  if (error) return [];
+  if (error) throw error;
   return data;
 }
 

@@ -9,9 +9,9 @@ describe('fetchAdminUsers', () => {
     expect(client.rpc).toHaveBeenCalledWith('admin_list_users');
   });
 
-  it('returns an empty array on error (e.g. caller is not a manager)', async () => {
-    const client = { rpc: vi.fn(() => Promise.resolve({ data: null, error: { message: 'not a manager' } })) };
-    expect(await fetchAdminUsers(client)).toEqual([]);
+  it('throws on a real RPC error (a non-manager caller instead gets empty data with no error — see supabase/schema.sql)', async () => {
+    const client = { rpc: vi.fn(() => Promise.resolve({ data: null, error: { message: 'boom' } })) };
+    await expect(fetchAdminUsers(client)).rejects.toMatchObject({ message: 'boom' });
   });
 
   it('returns an empty array when no client is configured', async () => {
@@ -27,9 +27,9 @@ describe('fetchAdminTasks', () => {
     expect(client.rpc).toHaveBeenCalledWith('admin_list_tasks');
   });
 
-  it('returns an empty array on error', async () => {
+  it('throws on error', async () => {
     const client = { rpc: vi.fn(() => Promise.resolve({ data: null, error: { message: 'boom' } })) };
-    expect(await fetchAdminTasks(client)).toEqual([]);
+    await expect(fetchAdminTasks(client)).rejects.toMatchObject({ message: 'boom' });
   });
 });
 

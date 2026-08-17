@@ -9,7 +9,7 @@ import { supabase } from './api.js';
 export async function fetchAdminUsers(client = supabase) {
   if (!client) return [];
   const { data, error } = await client.rpc('admin_list_users');
-  if (error) return [];
+  if (error) throw error;
   return data;
 }
 
@@ -17,7 +17,7 @@ export async function fetchAdminUsers(client = supabase) {
 export async function fetchAdminTasks(client = supabase) {
   if (!client) return [];
   const { data, error } = await client.rpc('admin_list_tasks');
-  if (error) return [];
+  if (error) throw error;
   return data;
 }
 

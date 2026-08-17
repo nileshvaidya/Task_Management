@@ -7,6 +7,8 @@ import {
   renderTaskRow,
   renderActivityCard,
   renderMemberCard,
+  renderListSkeleton,
+  renderErrorState,
 } from './components.js';
 
 describe('escapeHtml', () => {
@@ -246,5 +248,41 @@ describe('renderMemberCard', () => {
   it('labels an employee correctly', () => {
     const el = mount({ ...member, role: 'employee' }, []);
     expect(getByText(el, 'Employee')).toBeTruthy();
+  });
+});
+
+describe('renderListSkeleton', () => {
+  it('renders the default number of placeholder rows', () => {
+    const el = document.createElement('div');
+    el.innerHTML = renderListSkeleton();
+    expect(el.querySelectorAll('.skeleton-bar').length).toBe(6); // 3 rows × 2 bars
+    expect(el.querySelector('[data-role="list-skeleton"]').getAttribute('aria-busy')).toBe('true');
+  });
+
+  it('honors a custom row count', () => {
+    const el = document.createElement('div');
+    el.innerHTML = renderListSkeleton(1);
+    expect(el.querySelectorAll('.skeleton-bar').length).toBe(2);
+  });
+});
+
+describe('renderErrorState', () => {
+  it('renders the message and a retry action', () => {
+    const el = document.createElement('div');
+    el.innerHTML = renderErrorState('Could not load tasks.');
+    expect(getByText(el, 'Could not load tasks.')).toBeTruthy();
+    expect(el.querySelector('[data-action="retry"]')).toBeTruthy();
+  });
+
+  it('falls back to a default message', () => {
+    const el = document.createElement('div');
+    el.innerHTML = renderErrorState();
+    expect(el.querySelector('[data-role="error-state"]').textContent).toMatch(/went wrong/i);
+  });
+
+  it('escapes HTML in a custom message', () => {
+    const el = document.createElement('div');
+    el.innerHTML = renderErrorState('<script>alert(1)</script>');
+    expect(el.querySelector('script')).toBeNull();
   });
 });

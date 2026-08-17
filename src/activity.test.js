@@ -45,9 +45,9 @@ describe('fetchTeamActivity', () => {
     expect(await fetchTeamActivity(client)).toEqual(entries);
   });
 
-  it('returns an empty array on error rather than throwing', async () => {
+  it('throws on a real query error, distinct from a genuinely empty feed', async () => {
     const client = { from: vi.fn(() => chainable({ data: null, error: { message: 'boom' } })) };
-    expect(await fetchTeamActivity(client)).toEqual([]);
+    await expect(fetchTeamActivity(client)).rejects.toMatchObject({ message: 'boom' });
   });
 
   it('returns an empty array when no client is configured', async () => {

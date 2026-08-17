@@ -3,7 +3,7 @@
 // Tailwind breakpoints on one markup tree — no device-state branching.
 import { getCurrentProfile } from '../auth.js';
 import { renderShell } from '../layout.js';
-import { renderTaskRow, escapeHtml } from '../components.js';
+import { renderTaskRow, renderListSkeleton, renderErrorState, escapeHtml } from '../components.js';
 import { createStore } from '../state.js';
 import { fetchMyTasks, fetchTeamTasks, createTask, setTaskStatus, toggleTaskDone, acceptTask } from '../tasks.js';
 import { computeWeeklyProgress } from '../taskStats.js';
@@ -27,6 +27,7 @@ export async function render(container) {
   const store = createStore({
     tasks: [],
     loading: true,
+    error: false,
     filter: 'all',
     viewingTeam: false,
     quickAddValue: '',
@@ -36,8 +37,12 @@ export async function render(container) {
 
   async function loadTasks() {
     const s = store.getState();
-    const tasks = s.viewingTeam ? await fetchTeamTasks(user.id) : await fetchMyTasks(user.id);
-    store.setState({ tasks, loading: false });
+    try {
+      const tasks = s.viewingTeam ? await fetchTeamTasks(user.id) : await fetchMyTasks(user.id);
+      store.setState({ tasks, loading: false, error: false });
+    } catch {
+      store.setState({ loading: false, error: true });
+    }
   }
 
   function paint() {
@@ -62,7 +67,7 @@ export async function render(container) {
   );
 }
 
-function renderContent(content, state, user) {
+export function renderContent(content, state, user) {
   const today = todayISODate();
   const visibleTasks =
     state.filter === 'pending' ? state.tasks.filter((t) => t.status !== 'completed') : state.tasks;
@@ -108,10 +113,12 @@ function renderContent(content, state, user) {
           <div data-role="task-list">
             ${
               state.loading
-                ? `<p class="text-neutral-500 text-sm py-4">Loading…</p>`
-                : visibleTasks.length === 0
-                  ? `<p class="text-neutral-500 text-sm py-4">No tasks here.</p>`
-                  : visibleTasks.map((t) => renderTaskRow(t, user.id)).join('')
+                ? renderListSkeleton()
+                : state.error
+                  ? renderErrorState('Could not load your tasks.')
+                  : visibleTasks.length === 0
+                    ? `<p class="text-neutral-500 text-sm py-4">No tasks here.</p>`
+                    : visibleTasks.map((t) => renderTaskRow(t, user.id)).join('')
             }
           </div>
         </div>
@@ -156,6 +163,11 @@ function renderContent(content, state, user) {
 }
 
 function wireEvents(content, store, user, loadTasks) {
+  content.querySelector('[data-role="task-list"] [data-action="retry"]')?.addEventListener('click', () => {
+    store.setState({ loading: true });
+    loadTasks();
+  });
+
   const quickAddForm = content.querySelector('[data-form="quick-add"]');
   quickAddForm.addEventListener('submit', async (event) => {
     event.preventDefault();

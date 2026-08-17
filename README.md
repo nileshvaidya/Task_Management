@@ -10,12 +10,13 @@ acceptance workflow. Built to the "Nocturne" dark-theme design system.
 - **PWA**: installable manifest + service worker via `vite-plugin-pwa`.
 - **Testing**: Vitest + jsdom + @testing-library/dom (unit/logic), Playwright
   (e2e), ESLint + `tsc --noEmit` (lint/typecheck).
-- **CI/CD**: GitHub Actions (lint → typecheck → unit → e2e → build) on every
-  push/PR; deploys to Vercel, backed by Supabase.
+- **CI/CD**: GitHub Actions (lint → typecheck → unit → e2e → build, plus a
+  Lighthouse CI job) on every push/PR; deploys to Vercel, backed by
+  Supabase — see `DEPLOYMENT.md` for environment separation and rollback.
 
 This project is being built in phases per the build brief; see
 `CHANGELOG.md` for what's shipped and `TEST_REPORT.md` for test results per
-phase. **Current status: Phase 5 (Dependencies & Cross-User Task Assignment & Acceptance) complete.**
+phase. **Current status: Phase 6 (Polish, Accessibility, PWA & Deployment Hardening) complete — the brief's production go-live gate.** See `DEPLOYMENT.md` for environment separation, secrets, and the rollback plan.
 
 ## Project layout
 
@@ -29,6 +30,7 @@ src/
   validation.js                # pure form-validation logic (signup/signin/new-task)
   demoMode.js                   # VITE_DEMO_MODE + ?demoRole= dev bypass
   state.js                       # small in-memory store + pub-sub
+  pwaInstall.js                   # captures beforeinstallprompt/appinstalled, exposes promptInstall()
   tasks.js                        # task CRUD + dependency/acceptance data layer
   activity.js                      # activity_log data layer (logActivity, fetchTeamActivity)
   users.js                          # team membership queries (fetchTeamMembers)
@@ -40,8 +42,8 @@ src/
   taskStats.js                            # pure calculations (weekly progress, ...)
   teamStats.js                             # pure calculations (team pulse, blockers, today's focus)
   layout.js                                 # shared app shell (desktop sidebar / mobile top bar+tabs)
-  components.js                              # shared render helpers (escapeHtml, renderIdentityBlock, renderTaskRow incl. Task Acceptance UI, renderActivityCard, renderMemberCard)
-  screens/                                    # dashboard.js, team.js, admin.js, login.js
+  components.js                              # shared render helpers (escapeHtml, renderIdentityBlock, renderTaskRow incl. Task Acceptance UI, renderActivityCard, renderMemberCard, renderListSkeleton/renderErrorState)
+  screens/                                    # dashboard.js, team.js, admin.js, login.js — renderContent exported from each for direct async-state unit tests
   dialogs/                                     # newTaskDialog.js (full: Project/Priority/Assign To/Dependencies), addUserDialog.js
   styles/
     tailwind-base.css                            # @tailwind base
@@ -60,6 +62,8 @@ supabase/
     admin-invite-user/       # Edge Function: real Auth invite for "Add User" (needs `supabase functions deploy`)
 design-reference/        # the Nocturne design system + prototype handoff
 e2e/                      # Playwright specs
+.lighthouserc.json       # Lighthouse CI thresholds (performance/accessibility ≥ 90) — see CHANGELOG for why "PWA" isn't a scoreable category anymore
+DEPLOYMENT.md            # environments, secrets inventory, rollback plan
 vite.config.js, tailwind.config.js, playwright.config.js, eslint.config.js, tsconfig.json
 ```
 
@@ -91,12 +95,19 @@ npm test                   # Vitest unit tests
 npm run e2e                 # Playwright e2e tests (starts the dev server itself)
 npm run build                 # production build (also generates the PWA manifest/SW)
 npm run test:integration        # RLS integration tests — needs SUPABASE_URL/SUPABASE_ANON_KEY/SUPABASE_SERVICE_ROLE_KEY
+npm run lighthouse               # Lighthouse CI against a demo-mode build (build with VITE_DEMO_MODE=true first — see .github/workflows/ci.yml's lighthouse job)
 ```
 
 Playwright note: this repo pins to whatever Chromium `npx playwright
 install` fetches for the installed `@playwright/test` version. If you're on
 a machine with a pre-installed Chromium at a different revision, set
 `PLAYWRIGHT_CHROMIUM_PATH` to its executable before running `npm run e2e`.
+
+Lighthouse note: needs a real Chrome/Chromium on the machine running it —
+GitHub Actions' `ubuntu-latest` runner has one preinstalled, but locally
+(or in a container without one) set `CHROME_PATH` to an existing
+executable first. Running as root also needs `--no-sandbox`, already set
+in `.lighthouserc.json`'s `chromeFlags`.
 
 ## Design reference
 

@@ -7,3 +7,5 @@ dev-dist/
 playwright-report/
 test-results/
 coverage/
+lighthouse-report/
+.lighthouseci/
