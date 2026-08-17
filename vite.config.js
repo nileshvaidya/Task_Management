@@ -16,7 +16,12 @@ export default defineConfig({
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          // Distinct, more tightly-padded artwork for the maskable slot —
+          // the OS crops to a shape (circle, squircle, ...) and only the
+          // inner ~80% "safe zone" is guaranteed visible, so the plain
+          // 'any' icon above (which fills most of the square) would get
+          // its edges clipped if reused here.
+          { src: '/icons/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
       },
       workbox: {

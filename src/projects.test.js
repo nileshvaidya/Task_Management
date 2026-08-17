@@ -12,13 +12,13 @@ describe('fetchProjects', () => {
     expect(await fetchProjects(client)).toEqual(projects);
   });
 
-  it('returns an empty array on error', async () => {
+  it('throws on error', async () => {
     const client = {
       from: vi.fn(() => ({
         select: () => ({ order: () => Promise.resolve({ data: null, error: { message: 'boom' } }) }),
       })),
     };
-    expect(await fetchProjects(client)).toEqual([]);
+    await expect(fetchProjects(client)).rejects.toMatchObject({ message: 'boom' });
   });
 
   it('returns an empty array when no client is configured', async () => {

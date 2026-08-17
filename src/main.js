@@ -8,6 +8,7 @@
 import './styles/tailwind-base.css';
 import './styles/nocturne.css';
 import './styles/tailwind-components-utilities.css';
+import './pwaInstall.js';
 import { startRouter } from './router.js';
 
 const app = document.getElementById('app');

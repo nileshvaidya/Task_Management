@@ -16,6 +16,40 @@ export function initials(name) {
     .toUpperCase();
 }
 
+/**
+ * Loading skeleton for an async list (Phase 6) — replaces plain "Loading…"
+ * text with a few pulsing placeholder rows. `rows` defaults to 3; kept
+ * small since every screen's real lists are short in this app's size range.
+ * @param {number} [rows]
+ */
+export function renderListSkeleton(rows = 3) {
+  return `
+    <div data-role="list-skeleton" aria-busy="true" aria-label="Loading">
+      ${Array.from(
+        { length: rows },
+        () => `
+        <div style="padding:14px 0;border-top:1px solid var(--color-divider)">
+          <div class="skeleton-bar" style="height:14px;width:55%;border-radius:4px;margin-bottom:8px"></div>
+          <div class="skeleton-bar" style="height:11px;width:30%;border-radius:4px"></div>
+        </div>`
+      ).join('')}
+    </div>`;
+}
+
+/**
+ * Error state for a failed async list fetch (Phase 6) — distinct from the
+ * "no rows" empty state, with a Retry action. The calling screen wires up
+ * `[data-action="retry"]` to re-run its loader.
+ * @param {string} [message]
+ */
+export function renderErrorState(message = 'Something went wrong loading this. Please try again.') {
+  return `
+    <div data-role="error-state" style="padding:20px 0;text-align:center">
+      <p style="font-size:13px;color:var(--color-accent-2-200);margin:0 0 10px">${escapeHtml(message)}</p>
+      <button type="button" class="btn btn-secondary" data-action="retry" style="padding:6px 14px;font-size:13px">Retry</button>
+    </div>`;
+}
+
 const STATUS_LABEL = { planned: 'Planned', 'in-progress': 'In-Progress', completed: 'Completed' };
 const STATUS_TAG_CLASS = { planned: 'tag-neutral', 'in-progress': 'tag-outline', completed: 'tag-accent' };
 

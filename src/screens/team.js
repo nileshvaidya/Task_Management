@@ -12,7 +12,7 @@
 // be revisited if a future phase defines what a "sprint" is here.
 import { getCurrentProfile } from '../auth.js';
 import { renderShell } from '../layout.js';
-import { renderActivityCard, renderMemberCard, escapeHtml } from '../components.js';
+import { renderActivityCard, renderMemberCard, renderListSkeleton, renderErrorState, escapeHtml } from '../components.js';
 import { createStore } from '../state.js';
 import { fetchTeamActivity } from '../activity.js';
 import { fetchAllTeamTasks } from '../tasks.js';
@@ -35,25 +35,34 @@ export async function render(container) {
     teamTasks: [],
     teamMembers: [],
     loading: true,
+    error: false,
   });
+
+  async function loadData() {
+    store.setState({ loading: true, error: false });
+    try {
+      const [activity, teamTasks, teamMembers] = await Promise.all([
+        fetchTeamActivity(),
+        fetchAllTeamTasks(user.id),
+        fetchTeamMembers(user.id),
+      ]);
+      store.setState({ activity, teamTasks, teamMembers, loading: false });
+    } catch {
+      store.setState({ loading: false, error: true });
+    }
+  }
 
   function paint() {
     renderContent(content, store.getState());
-    wireEvents(content, store);
+    wireEvents(content, store, loadData);
   }
 
   store.subscribe(paint);
   paint();
-
-  const [activity, teamTasks, teamMembers] = await Promise.all([
-    fetchTeamActivity(),
-    fetchAllTeamTasks(user.id),
-    fetchTeamMembers(user.id),
-  ]);
-  store.setState({ activity, teamTasks, teamMembers, loading: false });
+  await loadData();
 }
 
-function renderContent(content, state) {
+export function renderContent(content, state) {
   content.innerHTML = `
     <div class="flex items-start justify-between gap-5 mb-6 flex-wrap">
       <div>
@@ -66,12 +75,16 @@ function renderContent(content, state) {
       </div>
     </div>
 
-    ${state.loading ? renderLoading() : state.tab === 'feed' ? renderFeedTab(state) : renderOverviewTab(state)}
+    ${
+      state.loading
+        ? renderListSkeleton()
+        : state.error
+          ? renderErrorState('Could not load team data.')
+          : state.tab === 'feed'
+            ? renderFeedTab(state)
+            : renderOverviewTab(state)
+    }
   `;
-}
-
-function renderLoading() {
-  return `<p class="text-neutral-500 text-sm py-4" data-role="team-loading">Loading…</p>`;
 }
 
 function renderFeedTab(state) {
@@ -134,10 +147,12 @@ function renderOverviewTab(state) {
 }
 
 
-function wireEvents(content, store) {
+function wireEvents(content, store, loadData) {
   content.querySelectorAll('input[name="team-tab"]').forEach((radio) => {
     radio.addEventListener('change', () => {
       if (radio.checked) store.setState({ tab: radio.value });
     });
   });
+
+  content.querySelector('[data-action="retry"]')?.addEventListener('click', () => loadData());
 }

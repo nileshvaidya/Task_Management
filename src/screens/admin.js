@@ -8,7 +8,7 @@
 // simple top-level state fields.
 import { getCurrentProfile } from '../auth.js';
 import { renderShell } from '../layout.js';
-import { escapeHtml, initials } from '../components.js';
+import { escapeHtml, initials, renderListSkeleton, renderErrorState } from '../components.js';
 import { createStore } from '../state.js';
 import { fetchAdminUsers, fetchAdminTasks, setUserStatus, softDeleteUser, overrideTask } from '../admin.js';
 import { filterUsers } from '../adminFilter.js';
@@ -35,6 +35,7 @@ export async function render(container) {
     users: [],
     tasks: [],
     loading: true,
+    loadError: false,
     search: '',
     confirmDeleteId: null,
     overrideTaskId: null,
@@ -42,8 +43,12 @@ export async function render(container) {
   });
 
   async function loadData() {
-    const [users, tasks] = await Promise.all([fetchAdminUsers(), fetchAdminTasks()]);
-    store.setState({ users, tasks, loading: false });
+    try {
+      const [users, tasks] = await Promise.all([fetchAdminUsers(), fetchAdminTasks()]);
+      store.setState({ users, tasks, loading: false, loadError: false });
+    } catch {
+      store.setState({ loading: false, loadError: true });
+    }
   }
 
   function paint() {
@@ -64,7 +69,7 @@ export async function render(container) {
   );
 }
 
-function renderContent(content, state, currentUserId) {
+export function renderContent(content, state, currentUserId) {
   const visibleUsers = filterUsers(state.users, state.search);
   const usersById = new Map(state.users.map((u) => [u.id, u]));
 
@@ -94,10 +99,12 @@ function renderContent(content, state, currentUserId) {
           <tbody>
             ${
               state.loading
-                ? `<tr><td colspan="5" class="text-muted text-sm">Loading…</td></tr>`
-                : visibleUsers.length === 0
-                  ? `<tr><td colspan="5" class="text-muted text-sm">No users found.</td></tr>`
-                  : visibleUsers.map((u) => renderUserRow(u, state, currentUserId)).join('')
+                ? `<tr><td colspan="5">${renderListSkeleton(2)}</td></tr>`
+                : state.loadError
+                  ? `<tr><td colspan="5">${renderErrorState('Could not load users.')}</td></tr>`
+                  : visibleUsers.length === 0
+                    ? `<tr><td colspan="5" class="text-muted text-sm">No users found.</td></tr>`
+                    : visibleUsers.map((u) => renderUserRow(u, state, currentUserId)).join('')
             }
           </tbody>
         </table>
@@ -112,10 +119,12 @@ function renderContent(content, state, currentUserId) {
           <tbody>
             ${
               state.loading
-                ? `<tr><td colspan="4" class="text-muted text-sm">Loading…</td></tr>`
-                : state.tasks.length === 0
-                  ? `<tr><td colspan="4" class="text-muted text-sm">No tasks found.</td></tr>`
-                  : state.tasks.map((t) => renderGlobalTaskRow(t, state, usersById)).join('')
+                ? `<tr><td colspan="4">${renderListSkeleton(2)}</td></tr>`
+                : state.loadError
+                  ? `<tr><td colspan="4">${renderErrorState('Could not load tasks.')}</td></tr>`
+                  : state.tasks.length === 0
+                    ? `<tr><td colspan="4" class="text-muted text-sm">No tasks found.</td></tr>`
+                    : state.tasks.map((t) => renderGlobalTaskRow(t, state, usersById)).join('')
             }
           </tbody>
         </table>
@@ -198,6 +207,10 @@ function renderGlobalTaskRow(t, state, usersById) {
 }
 
 function wireEvents(content, store, loadData) {
+  content.querySelectorAll('[data-action="retry"]').forEach((btn) => {
+    btn.addEventListener('click', () => loadData());
+  });
+
   const searchInput = content.querySelector('[data-role="user-search"]');
   searchInput.addEventListener('input', () => {
     store.setState({ search: searchInput.value });

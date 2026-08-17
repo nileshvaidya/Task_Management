@@ -20,6 +20,31 @@ const PRIORITIES = [
   { value: 'critical', label: 'Critical' },
 ];
 
+/**
+ * A CSS selector that re-finds the same logical element after a full
+ * innerHTML re-render, for focus restoration (see `paint()` above). Not
+ * exhaustive for every field in the dialog — just the ones that can
+ * plausibly still have focus right as a setState() fires (an `input`/
+ * `change` listener, or a click/keydown on a data-action control).
+ * @param {Element|null} el
+ */
+function focusSelectorFor(el) {
+  if (!el) return null;
+  if (el.id) return `#${CSS.escape(el.id)}`;
+  const action = el.getAttribute('data-action');
+  if (action) {
+    const priority = el.getAttribute('data-priority');
+    if (priority) return `[data-action="${action}"][data-priority="${priority}"]`;
+    const taskId = el.getAttribute('data-task-id');
+    if (taskId) return `[data-action="${action}"][data-task-id="${taskId}"]`;
+    return `[data-action="${action}"]`;
+  }
+  const name = el.getAttribute('name');
+  const value = /** @type {HTMLInputElement} */ (el).value;
+  if (name && value) return `[name="${name}"][value="${value}"]`;
+  return null;
+}
+
 /** @param {{ id: string, name: string, role: string }} user */
 export function open(user) {
   const root = document.getElementById(ROOT_ID);
@@ -53,16 +78,58 @@ export function open(user) {
   });
 
   function paint() {
+    // The full-innerHTML re-render on every setState() (see Phase 5's
+    // CHANGELOG bug #1) also silently drops keyboard focus to <body> on
+    // every interaction — a real problem for the "complete this dialog
+    // without a mouse" requirement (Phase 6 test case 2), since Tab from
+    // <body> restarts at the top of the whole page, not back inside the
+    // dialog. Capture what was focused, by a selector stable across a
+    // re-render, and restore it afterward — including caret position:
+    // .focus() alone resets a text input's caret to 0, which on a re-render
+    // triggered by the input's own keystroke (typing fires 'input' on every
+    // character) would insert each next character at the start instead of
+    // the end, silently reversing whatever was typed.
+    const active = root.contains(document.activeElement) ? document.activeElement : null;
+    const focusSelector = focusSelectorFor(active);
+    let selection = null;
+    if (active && 'selectionStart' in active) {
+      try {
+        selection = { start: /** @type {any} */ (active).selectionStart, end: /** @type {any} */ (active).selectionEnd };
+      } catch {
+        // Some input types (date/number) don't support selection ranges.
+      }
+    }
     root.innerHTML = renderDialog(store.getState(), user, today);
     wireEvents(root, store, user);
+    if (focusSelector) {
+      const next = /** @type {HTMLElement} */ (root.querySelector(focusSelector));
+      next?.focus();
+      if (selection && next && 'setSelectionRange' in next) {
+        try {
+          /** @type {any} */ (next).setSelectionRange(selection.start, selection.end);
+        } catch {
+          // Same non-text-input-type exception as above.
+        }
+      }
+    }
   }
 
   store.subscribe(paint);
   paint();
 
+  // Each falls back independently rather than failing the whole dialog
+  // open — this is background enrichment (the Project picker, the
+  // manager's team for Assign To), not something the user directly
+  // requested the way toggling "Has Dependency" below is. A transient
+  // failure to fetch the team list shouldn't lock a manager out of
+  // creating any task at all; it should just degrade to "no projects
+  // yet"/"assign to yourself" the same way it always could for an
+  // employee (whose Assign To is self-only regardless).
   Promise.all([
-    fetchProjects(),
-    user.role === 'manager' ? fetchTeamMembers(user.id) : Promise.resolve([{ id: user.id, name: user.name }]),
+    fetchProjects().catch(() => []),
+    user.role === 'manager'
+      ? fetchTeamMembers(user.id).catch(() => [{ id: user.id, name: user.name }])
+      : Promise.resolve([{ id: user.id, name: user.name }]),
   ]).then(([projects, primaryAssignOptions]) => {
     store.setState({ projects, primaryAssignOptions, loading: false });
   });
@@ -149,7 +216,7 @@ function renderDialog(state, user, today) {
                 <div style="font-size:12px;color:var(--color-neutral-500);margin-top:2px">Link this task to others or assign dependencies</div>
               </div>
               <div class="flex items-center gap-2" style="flex:none">
-                <div class="wsswitch" data-action="toggle-has-dependency" style="${state.hasDependency ? 'background:var(--color-accent-800);border-color:var(--color-accent)' : ''}"><i style="${state.hasDependency ? 'transform:translateX(14px);background:var(--color-accent-200)' : ''}"></i></div>
+                <div class="wsswitch" data-action="toggle-has-dependency" role="switch" aria-checked="${state.hasDependency}" aria-label="Has Dependency" tabindex="0" style="${state.hasDependency ? 'background:var(--color-accent-800);border-color:var(--color-accent)' : ''}"><i style="${state.hasDependency ? 'transform:translateX(14px);background:var(--color-accent-200)' : ''}"></i></div>
                 <span style="font-size:13px">Has Dependency</span>
               </div>
             </div>
@@ -281,13 +348,28 @@ function wireEvents(root, store, user) {
     btn.addEventListener('click', () => store.setState({ priority: btn.getAttribute('data-priority') }));
   });
 
-  root.querySelector('[data-action="toggle-has-dependency"]')?.addEventListener('click', () => {
+  function toggleHasDependency() {
     const next = !store.getState().hasDependency;
     store.setState({ hasDependency: next });
     if (next && store.getState().assignableUsers.length === 0) {
-      Promise.all([fetchAssignableUsers(), fetchDependencyCandidates()]).then(([assignableUsers, dependencyCandidates]) => {
-        store.setState({ assignableUsers, dependencyCandidates });
-      });
+      Promise.all([fetchAssignableUsers(), fetchDependencyCandidates()])
+        .then(([assignableUsers, dependencyCandidates]) => {
+          store.setState({ assignableUsers, dependencyCandidates });
+        })
+        .catch(() => {
+          store.setState({ error: 'Could not load users/tasks for the dependency picker. Try again.' });
+        });
+    }
+  }
+  const hasDependencySwitch = root.querySelector('[data-action="toggle-has-dependency"]');
+  hasDependencySwitch?.addEventListener('click', toggleHasDependency);
+  // A role="switch" div has no native activation keys — Enter/Space have to
+  // be wired up by hand to match what a real <button>/<input> would do for
+  // free (Phase 6 keyboard accessibility pass).
+  hasDependencySwitch?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleHasDependency();
     }
   });
 

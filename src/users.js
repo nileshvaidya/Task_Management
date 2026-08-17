@@ -18,9 +18,10 @@ import { supabase } from './api.js';
 export async function fetchTeamMembers(callerId, client = supabase) {
   if (!client) return [];
   const { data: ids, error: idsError } = await client.rpc('team_member_ids', { uid: callerId });
-  if (idsError || !ids || ids.length === 0) return [];
+  if (idsError) throw idsError;
+  if (!ids || ids.length === 0) return [];
 
   const { data, error } = await client.from('users').select('*').in('id', ids).order('name');
-  if (error) return [];
+  if (error) throw error;
   return data;
 }

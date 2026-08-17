@@ -57,6 +57,61 @@ jobs:
           path: playwright-report/
           retention-days: 14
 
+  lighthouse:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Demo mode is compiled in at build time (VITE_DEMO_MODE is read via
+      # import.meta.env, inlined by Vite), so this is a separate build from
+      # the "Build" step above — that one deliberately ships with demo mode
+      # off, matching the real production artifact. This one exists only so
+      # Lighthouse has real rendered screens (Dashboard/Team/Admin) to
+      # audit without needing a live Supabase project in CI.
+      - name: Build (demo mode, for Lighthouse to audit real screens)
+        run: npm run build
+        env:
+          VITE_SUPABASE_URL: https://placeholder.supabase.co
+          VITE_SUPABASE_ANON_KEY: placeholder-anon-key
+          VITE_DEMO_MODE: 'true'
+
+      # Lighthouse's own PWA category (and its installable-manifest/
+      # service-worker audits) was removed upstream as of Lighthouse 10 —
+      # this repo pins @lhci/cli 0.15.1, which bundles Lighthouse 12, and
+      # verified locally that none of those audits exist anymore. The
+      # brief's "PWA ≥ 90" is a Lighthouse score that no longer exists to
+      # assert; installability is covered instead by this phase's own e2e
+      # test (phase6.spec.js's beforeinstallprompt capture) and the sanity
+      # check below that the manifest/service worker actually got built.
+      # ubuntu-latest ships Chrome pre-installed; chrome-launcher (used by
+      # lighthouse under the hood) finds it on PATH automatically, no
+      # explicit CHROME_PATH needed here (only needed locally in a
+      # container without Chrome preinstalled — see README's Checks
+      # section).
+      - name: Lighthouse CI (performance + accessibility ≥ 90)
+        run: npm run lighthouse
+
+      - name: PWA build artifacts sanity check (manifest + service worker)
+        run: |
+          test -s dist/manifest.webmanifest || (echo "::error::dist/manifest.webmanifest missing or empty" && exit 1)
+          test -s dist/sw.js || (echo "::error::dist/sw.js missing or empty" && exit 1)
+
+      - name: Upload Lighthouse reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: lighthouse-report/
+          retention-days: 14
+
   integration:
     runs-on: ubuntu-latest
     needs: build

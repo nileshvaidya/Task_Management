@@ -33,9 +33,9 @@ describe('fetchMyTasks', () => {
     expect(await fetchMyTasks('u1', client)).toEqual(tasks);
   });
 
-  it('returns an empty array on error rather than throwing', async () => {
+  it('throws on a real query error, distinct from a genuinely empty result', async () => {
     const client = { from: vi.fn(() => chainable({ data: null, error: { message: 'boom' } })) };
-    expect(await fetchMyTasks('u1', client)).toEqual([]);
+    await expect(fetchMyTasks('u1', client)).rejects.toMatchObject({ message: 'boom' });
   });
 
   it('returns an empty array when no client is configured', async () => {
@@ -67,6 +67,21 @@ describe('fetchTeamTasks', () => {
     expect(await fetchTeamTasks('m1', client)).toEqual([]);
     expect(tasksQuery).not.toHaveBeenCalled();
   });
+
+  it('throws when the reports lookup errors, distinct from genuinely having no reports', async () => {
+    const client = { from: vi.fn(() => chainable({ data: null, error: { message: 'boom' } })) };
+    await expect(fetchTeamTasks('m1', client)).rejects.toMatchObject({ message: 'boom' });
+  });
+
+  it('throws when the tasks query itself errors', async () => {
+    const client = {
+      from: vi.fn((table) => {
+        if (table === 'users') return chainable({ data: [{ id: 'e1' }], error: null });
+        return chainable({ data: null, error: { message: 'boom' } });
+      }),
+    };
+    await expect(fetchTeamTasks('m1', client)).rejects.toMatchObject({ message: 'boom' });
+  });
 });
 
 describe('fetchAllTeamTasks', () => {
@@ -81,10 +96,18 @@ describe('fetchAllTeamTasks', () => {
     expect(tasks).toEqual([{ id: 't1', owner_id: 'u1' }, { id: 't2', owner_id: 'u2' }]);
   });
 
-  it('returns an empty array when the RPC call errors', async () => {
+  it('throws when the team_member_ids RPC call errors', async () => {
     const client = { rpc: vi.fn(() => Promise.resolve({ data: null, error: { message: 'boom' } })), from: vi.fn() };
-    expect(await fetchAllTeamTasks('u1', client)).toEqual([]);
+    await expect(fetchAllTeamTasks('u1', client)).rejects.toMatchObject({ message: 'boom' });
     expect(client.from).not.toHaveBeenCalled();
+  });
+
+  it('throws when the tasks query itself errors', async () => {
+    const client = {
+      rpc: vi.fn(() => Promise.resolve({ data: ['u1'], error: null })),
+      from: vi.fn(() => chainable({ data: null, error: { message: 'boom' } })),
+    };
+    await expect(fetchAllTeamTasks('u1', client)).rejects.toMatchObject({ message: 'boom' });
   });
 
   it('returns an empty array when no client is configured', async () => {
@@ -212,9 +235,9 @@ describe('fetchAssignableUsers', () => {
     expect(client.rpc).toHaveBeenCalledWith('list_assignable_users');
   });
 
-  it('returns an empty array on error', async () => {
+  it('throws on error', async () => {
     const client = { rpc: vi.fn(() => Promise.resolve({ data: null, error: { message: 'boom' } })) };
-    expect(await fetchAssignableUsers(client)).toEqual([]);
+    await expect(fetchAssignableUsers(client)).rejects.toMatchObject({ message: 'boom' });
   });
 });
 
@@ -226,9 +249,9 @@ describe('fetchDependencyCandidates', () => {
     expect(client.rpc).toHaveBeenCalledWith('list_all_tasks_for_dependency');
   });
 
-  it('returns an empty array on error', async () => {
+  it('throws on error', async () => {
     const client = { rpc: vi.fn(() => Promise.resolve({ data: null, error: { message: 'boom' } })) };
-    expect(await fetchDependencyCandidates(client)).toEqual([]);
+    await expect(fetchDependencyCandidates(client)).rejects.toMatchObject({ message: 'boom' });
   });
 });
 
