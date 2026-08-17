@@ -1,5 +1,9 @@
 # Changelog
 
+## Help Manual correction (post-Phase 9)
+
+PR #12 (the Help manual) merged automatically as a side effect of merging Phase 9's PR #13 — its branch head commit was already an ancestor of Phase 9's branch, so GitHub detected it as merged the moment #13 landed, before the planned screenshot refresh could go in as part of that same PR. This is that refresh, as a fast follow-up: re-ran `scripts/capture-help-screenshots.mjs` against the post-Phase-9 UI so all 11 screenshots in `public/help/screenshots/` show the checklist icon, the "ASK Info-Solutions LLP" branding, and (for the Admin screenshots) the new Projects card, instead of the pre-Phase-9 look. No code changes — screenshots only.
+
 ## Phase 9 — Project Independence, Task Deletion, Brand Refresh
 
 Four direct user requests, not build-brief phase items: managers creating projects without going through the New Task dialog, managers deleting their own or their reports' tasks, a checklist app icon, and the company name surfaced in the app.
