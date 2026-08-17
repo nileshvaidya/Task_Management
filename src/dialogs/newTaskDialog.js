@@ -117,19 +117,22 @@ export function open(user) {
   store.subscribe(paint);
   paint();
 
+  // Each falls back independently rather than failing the whole dialog
+  // open — this is background enrichment (the Project picker, the
+  // manager's team for Assign To), not something the user directly
+  // requested the way toggling "Has Dependency" below is. A transient
+  // failure to fetch the team list shouldn't lock a manager out of
+  // creating any task at all; it should just degrade to "no projects
+  // yet"/"assign to yourself" the same way it always could for an
+  // employee (whose Assign To is self-only regardless).
   Promise.all([
-    fetchProjects(),
-    user.role === 'manager' ? fetchTeamMembers(user.id) : Promise.resolve([{ id: user.id, name: user.name }]),
-  ])
-    .then(([projects, primaryAssignOptions]) => {
-      store.setState({ projects, primaryAssignOptions, loading: false });
-    })
-    .catch(() => {
-      store.setState({
-        loading: false,
-        error: 'Could not load projects/team members. Close and reopen to try again.',
-      });
-    });
+    fetchProjects().catch(() => []),
+    user.role === 'manager'
+      ? fetchTeamMembers(user.id).catch(() => [{ id: user.id, name: user.name }])
+      : Promise.resolve([{ id: user.id, name: user.name }]),
+  ]).then(([projects, primaryAssignOptions]) => {
+    store.setState({ projects, primaryAssignOptions, loading: false });
+  });
 }
 
 function renderDialog(state, user, today) {

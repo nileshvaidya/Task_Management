@@ -115,6 +115,16 @@ test.describe('Phase 5 — requires-acceptance checkbox controls blocking (test 
     await page.route('**/rest/v1/rpc/list_assignable_users**', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'demo-u3', name: 'Marcus Cole' }]) })
     );
+    // Toggling "Has Dependency" fetches this alongside list_assignable_users
+    // (Promise.all) — leaving it unmocked used to be silently tolerated
+    // (the resulting network error against the unreachable placeholder host
+    // was swallowed into an empty array), but Phase 6 made that error throw
+    // instead, which now fails the whole Promise.all and leaves
+    // assignableUsers empty too. Mock it for real, matching what every
+    // other has-dependency test in this file already does.
+    await page.route('**/rest/v1/rpc/list_all_tasks_for_dependency**', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
+    );
     let insertCount = 0;
     await page.route('**/rest/v1/tasks**', (route) => {
       const req = route.request();
@@ -217,6 +227,11 @@ test.describe('Phase 5 — full cross-user dependency + acceptance flow (test ca
     await page.route('**/rest/v1/projects**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: '[]' }));
     await page.route('**/rest/v1/rpc/list_assignable_users**', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify([{ id: 'demo-u3', name: 'Marcus Cole' }]) })
+    );
+    // See mockCreationRoutes' comment above — unmocked, this used to
+    // silently resolve empty; Phase 6 made the underlying fetch throw.
+    await page.route('**/rest/v1/rpc/list_all_tasks_for_dependency**', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: '[]' })
     );
     await page.route('**/rest/v1/activity_log**', (route) =>
       route.fulfill({ status: 201, contentType: 'application/json', body: '{}' })
