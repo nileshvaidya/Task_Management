@@ -49,3 +49,30 @@ describe('team renderContent — async states', () => {
     expect(content.querySelector('[data-role="member-cards"]').textContent).toMatch(/no team members found/i);
   });
 });
+
+describe('team renderContent — export buttons (Phase 7)', () => {
+  it('renders Export CSV/PDF buttons, enabled once data has loaded', () => {
+    const content = document.createElement('div');
+    renderContent(content, baseState());
+    const csvBtn = content.querySelector('[data-action="export-csv"]');
+    const pdfBtn = content.querySelector('[data-action="export-pdf"]');
+    expect(csvBtn).toBeTruthy();
+    expect(pdfBtn).toBeTruthy();
+    expect(csvBtn.hasAttribute('disabled')).toBe(false);
+    expect(pdfBtn.hasAttribute('disabled')).toBe(false);
+  });
+
+  it('disables the export buttons while loading', () => {
+    const content = document.createElement('div');
+    renderContent(content, baseState({ loading: true }));
+    expect(content.querySelector('[data-action="export-csv"]').hasAttribute('disabled')).toBe(true);
+    expect(content.querySelector('[data-action="export-pdf"]').hasAttribute('disabled')).toBe(true);
+  });
+
+  it('disables the export buttons on error (nothing loaded to export)', () => {
+    const content = document.createElement('div');
+    renderContent(content, baseState({ error: true }));
+    expect(content.querySelector('[data-action="export-csv"]').hasAttribute('disabled')).toBe(true);
+    expect(content.querySelector('[data-action="export-pdf"]').hasAttribute('disabled')).toBe(true);
+  });
+});

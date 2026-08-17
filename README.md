@@ -16,7 +16,7 @@ acceptance workflow. Built to the "Nocturne" dark-theme design system.
 
 This project is being built in phases per the build brief; see
 `CHANGELOG.md` for what's shipped and `TEST_REPORT.md` for test results per
-phase. **Current status: Phase 6 (Polish, Accessibility, PWA & Deployment Hardening) complete — the brief's production go-live gate.** See `DEPLOYMENT.md` for environment separation, secrets, and the rollback plan.
+phase. **Current status: Phase 6 (the brief's production go-live gate) complete, plus one item from Phase 7's optional list — CSV/PDF export of team task history.** See `DEPLOYMENT.md` for environment separation, secrets, and the rollback plan.
 
 ## Project layout
 
@@ -38,6 +38,8 @@ src/
   adminFilter.js                      # pure search-filter logic for the User Management table
   projects.js                          # projects data layer (fetchProjects, createProject)
   dependencyFilter.js                   # pure search-filter logic for the dependency task picker
+  reportExport.js                        # pure row-building + CSV serialization for team task history export
+  reportDownload.js                       # triggers the CSV/PDF download (jsPDF/jspdf-autotable dynamically imported)
   dateUtils.js                           # pure date helpers (today, week range, calendar cells, relative time)
   taskStats.js                            # pure calculations (weekly progress, ...)
   teamStats.js                             # pure calculations (team pulse, blockers, today's focus)
