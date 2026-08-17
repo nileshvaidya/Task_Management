@@ -21,7 +21,11 @@ Adding a third `Promise.all` member (`fetchProjects`) to Admin's `loadData` mean
 ### Known items carried forward (not blockers)
 
 - Carried from Phase 0-8: `npm audit` dev-tooling advisories (deferred, breaking Vite major bump); `.lighthouserc.json` doesn't audit `/help`.
-- The Help manual's Admin screenshot (`public/help/screenshots/09-admin-user-management.png`) predates the new Projects card and won't show it until `scripts/capture-help-screenshots.mjs` is re-run — cosmetic staleness, not a functional gap (the manual's text doesn't claim to cover it either).
+- ~~The Help manual's Admin screenshot predates the new Projects card~~ — fixed; see "Help Manual correction" below.
+
+## Help Manual correction (post-Phase 9)
+
+All 11 screenshots in `public/help/screenshots/` regenerated via `scripts/capture-help-screenshots.mjs` against the post-Phase-9 UI. Verified visually: `01-login-signin.png` shows the checklist logo + "by ASK Info-Solutions LLP"; `09-admin-user-management.png` shows the sidebar's new logo/branding and the Projects card populated with fixture projects. No code changed — `npm run lint/typecheck/test` unaffected (246/246 unit tests still pass); `e2e/phase8.spec.js` (5/5) re-run to confirm every screenshot still loads with no broken images; `npm run build` succeeds.
 
 ## Help Manual
 
