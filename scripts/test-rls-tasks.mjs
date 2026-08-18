@@ -130,14 +130,23 @@ async function run() {
     const { data: crossEmployeeTask } = await clientEmpA.from('tasks').select('id').eq('id', taskB.id);
     assert((crossEmployeeTask ?? []).length === 0, "employee A cannot select employee B's task");
 
-    console.log("\nNegative case: manager A cannot delete employee A's task (delete is owner-only)...");
-    const { error: deleteError, count } = await clientMgrA
+    console.log("\nManager can delete their own report's task (Phase 9: \"Managers can delete reports' tasks\")...");
+    const { error: deleteOwnReportError, count: deleteOwnReportCount } = await clientMgrA
       .from('tasks')
       .delete({ count: 'exact' })
       .eq('id', taskA.id);
-    assert(!deleteError && count === 0, "manager A's delete attempt on employee A's task affects zero rows");
-    const { data: stillThere } = await admin.from('tasks').select('id').eq('id', taskA.id).single();
-    assert(stillThere?.id === taskA.id, "employee A's task still exists after manager A's delete attempt");
+    assert(!deleteOwnReportError && deleteOwnReportCount === 1, "manager A can delete employee A's task (their direct report)");
+    const { data: taskAGone } = await admin.from('tasks').select('id').eq('id', taskA.id).maybeSingle();
+    assert(!taskAGone, "employee A's task no longer exists after manager A deletes it");
+
+    console.log("\nNegative case: manager A cannot delete employee B's task (not their report)...");
+    const { error: deleteOtherReportError, count: deleteOtherReportCount } = await clientMgrA
+      .from('tasks')
+      .delete({ count: 'exact' })
+      .eq('id', taskB.id);
+    assert(!deleteOtherReportError && deleteOtherReportCount === 0, "manager A's delete attempt on employee B's task affects zero rows");
+    const { data: taskBStillThere } = await admin.from('tasks').select('id').eq('id', taskB.id).single();
+    assert(taskBStillThere?.id === taskB.id, "employee B's task still exists after manager A's delete attempt");
   } finally {
     console.log('\nCleaning up test users and tasks...');
     await admin.from('tasks').delete().in('id', [taskA.id, taskB.id]);
