@@ -1,5 +1,9 @@
 # Changelog
 
+## Docs: close the staging-separation gap that let CI hit production
+
+Root-caused the stray `RLS ...@example.com` test users that kept appearing in the production Admin screen: `DEPLOYMENT.md`'s staging-separation section described creating a staging Supabase project and pointing *Vercel Preview* at it, but never said the GitHub Actions `integration` job's `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` secrets also had to point there — so those secrets ended up set to the production project, and every `integration` CI run's `scripts/test-rls-*.mjs` scripts created (and, on script failure, sometimes failed to clean up) real rows in it. Rewrote that section into an explicit, numbered checklist that calls this out directly as the actual fix, with exact GitHub Settings navigation and a verification step for both CI and Vercel Preview. Docs only — no code changes. The account-side steps themselves (creating the staging project, setting the secrets/env vars) still have to be done by whoever administers the Supabase/Vercel/GitHub accounts; nothing in this repo can do that from a coding session.
+
 ## Bug fix: Admin screen text inputs lost focus on every keystroke
 
 Reported directly: typing into the new-project-name field on the Admin screen (Phase 9) lost focus after each character. Root cause: `admin.js`'s `paint()` does a full `content.innerHTML` re-render on every `store.setState()` call, and the field's `input` listener called `setState` on every keystroke — each character remounted the input as a fresh DOM node, dropping focus before the next character could land. Same bug class, same fix, as the New Task dialog's Phase 6 keyboard-accessibility fix: `paint()` now captures a re-findable selector (`focusSelectorFor`) plus caret position for whatever's focused before each re-render, and restores both afterward.

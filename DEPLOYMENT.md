@@ -17,29 +17,68 @@ deliverables from the build brief.
 ### Staging vs. production Supabase separation (required manual step)
 
 **This is an account-level setup step that has to be done once in the
-Vercel and Supabase dashboards — it can't be done from a coding session.**
-Without it, PR preview deployments write to the same database production
-does, which is the exact risk this phase's test case 5 exists to catch.
+GitHub, Vercel, and Supabase dashboards — it can't be done from a coding
+session (no API access to any of the three from here).** Without it, PR
+preview deployments *and* CI's `integration` job both write to the same
+database production does — this is exactly what happened before this
+section was tightened: the `integration` job's `SUPABASE_URL` /
+`SUPABASE_SERVICE_ROLE_KEY` secrets pointed at the production project, so
+every run of `scripts/test-rls-*.mjs` created (and, on a good run, deleted)
+real rows in it — `RLS Test Manager A ...`-style users left behind in the
+User Management screen whenever a run didn't clean up after itself. This
+phase's test case 5 exists specifically to catch this class of bug.
 
-1. Create a second Supabase project (e.g. `worksync-staging`) if one
-   doesn't exist yet. Apply the current `supabase/schema.sql` to it the
-   same way you did for production (SQL editor; see the main `README.md`).
-   Deploy the `admin-invite-user` Edge Function to it too
-   (`supabase/README.md`).
-2. In the Vercel project's **Settings → Environment Variables**, set
-   `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` **scoped per Vercel
-   environment**, not as a single shared value:
-   - **Production** environment → the production Supabase project's URL/anon key.
-   - **Preview** environment → the staging Supabase project's URL/anon key.
-   - (Development, if you use `vercel dev`, can point at either — staging is safer.)
-3. **Verify it took effect**: open any PR, wait for its Vercel preview
-   comment, load the preview URL, open browser devtools → Network, and
-   confirm requests go to the staging project's `*.supabase.co` host, not
-   production's. This is the concrete check for test case 5 ("staging
-   deploy does not write to the production project") — it isn't something
-   Playwright/CI can assert from outside Vercel's own environment-variable
-   resolution, so it's a one-time manual verification plus a periodic
-   sanity check whenever env vars are touched.
+**Step 1 — create the staging Supabase project.**
+Create a second Supabase project (e.g. `worksync-staging`) if one doesn't
+exist yet. Apply the current `supabase/schema.sql` to it the same way you
+did for production (SQL editor; see the main `README.md`). Deploy the
+`admin-invite-user` Edge Function to it too (`supabase/README.md`). Note
+down its **Project URL**, **anon public key**, and **service_role key**
+(Supabase dashboard → Settings → API) — you'll need all three below.
+
+**Step 2 — point GitHub Actions' `integration` job at staging.**
+This is the part that was missing before and is the actual fix for the
+pollution above.
+1. On GitHub, go to the repo → **Settings → Secrets and variables →
+   Actions**.
+2. Under the **Repository secrets** tab, for each of `SUPABASE_URL`,
+   `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`: if it already exists,
+   click it → **Update** and paste in the **staging** project's value; if
+   it doesn't exist yet, click **New repository secret** and add it.
+   **All three must be the staging project's values — never
+   production's.** These three secrets exist solely so
+   `.github/workflows/ci.yml`'s `integration` job can run
+   `scripts/test-rls-*.mjs` against a real database; that database must
+   never be the one real users' data lives in.
+3. If `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` also exist as repo
+   secrets (used by the `build`/e2e steps as a fallback-only value — see
+   the workflow file), point those at staging too for the same reason,
+   though the e2e suite mocks all network calls so this matters far less
+   than step 2's three.
+
+**Step 3 — point Vercel Preview deployments at staging.**
+In the Vercel project's **Settings → Environment Variables**, set
+`VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` **scoped per Vercel
+environment**, not as a single shared value:
+- **Production** environment → the production Supabase project's URL/anon key.
+- **Preview** environment → the staging Supabase project's URL/anon key.
+- (Development, if you use `vercel dev`, can point at either — staging is safer.)
+
+**Step 4 — verify both took effect.**
+- *CI*: open the **Actions** tab on GitHub, find the latest `CI` run's
+  `integration` job, and confirm it ran (not skipped) and passed. Then
+  check the staging project's `public.users` table in the Supabase SQL
+  editor — you should see (and, after a clean run, *not* see, since the
+  scripts clean up after themselves) the `RLS ...@example.com` test rows
+  there, never in production's.
+- *Preview deploys*: open any PR, wait for its Vercel preview comment,
+  load the preview URL, open browser devtools → Network, and confirm
+  requests go to the staging project's `*.supabase.co` host, not
+  production's.
+- Neither of these is something Playwright/CI can assert from outside
+  Vercel's/GitHub's own environment-variable resolution, so both are a
+  one-time manual verification plus a periodic sanity check whenever these
+  secrets/env vars are touched again.
 
 ## Environment variables & secrets inventory
 
@@ -47,9 +86,9 @@ does, which is the exact risk this phase's test case 5 exists to catch.
 |---|---|---|---|
 | `VITE_SUPABASE_URL` | Vercel (per-environment), GitHub Actions repo secret, local `.env` | Client bundle (compiled in at build time) | No — a public project URL |
 | `VITE_SUPABASE_ANON_KEY` | same as above | Client bundle | No — anon key is safe to expose by design; RLS is the actual access boundary |
-| `SUPABASE_URL` | GitHub Actions repo secret only | `scripts/test-rls-*.mjs` (`integration` CI job) | No |
-| `SUPABASE_ANON_KEY` | GitHub Actions repo secret only | same | No |
-| `SUPABASE_SERVICE_ROLE_KEY` | GitHub Actions repo secret only; Supabase project's own Edge Function secrets | `scripts/test-rls-*.mjs`; `admin-invite-user` Edge Function | **Yes — bypasses RLS entirely.** Never put this in a `VITE_*` variable (it would ship to every browser) or in any client-side code path. |
+| `SUPABASE_URL` | GitHub Actions repo secret only — **must be the staging project, never production** (see "Staging vs. production Supabase separation" above) | `scripts/test-rls-*.mjs` (`integration` CI job) | No |
+| `SUPABASE_ANON_KEY` | GitHub Actions repo secret only — **staging, never production** | same | No |
+| `SUPABASE_SERVICE_ROLE_KEY` | GitHub Actions repo secret only (**staging project's key**); Supabase project's own Edge Function secrets (production project's key, for the real Edge Function) | `scripts/test-rls-*.mjs`; `admin-invite-user` Edge Function | **Yes — bypasses RLS entirely.** Never put this in a `VITE_*` variable (it would ship to every browser) or in any client-side code path. The GitHub Actions copy and the production Edge Function's copy are two *different* projects' keys — don't reuse one for the other. |
 | `VITE_DEMO_MODE` | Only ever set locally or in CI/Lighthouse builds, never in a real Vercel deployment | `src/demoMode.js` | No, but see below |
 
 Review checklist before every production deploy:
