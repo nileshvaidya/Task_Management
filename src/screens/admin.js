@@ -19,6 +19,24 @@ import { open as openAddUserDialog } from '../dialogs/addUserDialog.js';
 const STATUS_LABEL = { planned: 'Planned', 'in-progress': 'In-Progress', completed: 'Completed' };
 const STATUS_TAG_CLASS = { planned: 'tag-neutral', 'in-progress': 'tag-outline', completed: 'tag-accent' };
 
+/**
+ * A CSS selector that re-finds the same logical element after a full
+ * innerHTML re-render, for focus restoration in `paint()` below — same
+ * fix, same reason, as newTaskDialog.js's `focusSelectorFor` (Phase 6):
+ * the user-search and new-project-name text inputs both push every
+ * keystroke into the store, which re-renders the whole screen and remounts
+ * them as fresh DOM nodes, silently dropping focus (and, without also
+ * restoring caret position, reversing whatever gets typed next).
+ * @param {Element|null} el
+ */
+function focusSelectorFor(el) {
+  if (!el) return null;
+  if (el.id) return `#${CSS.escape(el.id)}`;
+  const role = el.getAttribute('data-role');
+  if (role) return `[data-role="${role}"]`;
+  return null;
+}
+
 export async function render(container) {
   const user = await getCurrentProfile();
   if (!user) {
@@ -56,8 +74,29 @@ export async function render(container) {
   }
 
   function paint() {
+    const active = content.contains(document.activeElement) ? document.activeElement : null;
+    const focusSelector = focusSelectorFor(active);
+    let selection = null;
+    if (active && 'selectionStart' in active) {
+      try {
+        selection = { start: /** @type {any} */ (active).selectionStart, end: /** @type {any} */ (active).selectionEnd };
+      } catch {
+        // Some input types (date/number) don't support selection ranges.
+      }
+    }
     renderContent(content, store.getState(), user.id);
     wireEvents(content, store, loadData);
+    if (focusSelector) {
+      const next = /** @type {HTMLElement} */ (content.querySelector(focusSelector));
+      next?.focus();
+      if (selection && next && 'setSelectionRange' in next) {
+        try {
+          /** @type {any} */ (next).setSelectionRange(selection.start, selection.end);
+        } catch {
+          // Same non-text-input-type exception as above.
+        }
+      }
+    }
   }
 
   store.subscribe(paint);
