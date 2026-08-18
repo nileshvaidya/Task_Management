@@ -1,5 +1,9 @@
 # Changelog
 
+## Docs: close the staging-separation gap that let CI hit production
+
+Root-caused the stray `RLS ...@example.com` test users that kept appearing in the production Admin screen: `DEPLOYMENT.md`'s staging-separation section described creating a staging Supabase project and pointing *Vercel Preview* at it, but never said the GitHub Actions `integration` job's `SUPABASE_URL`/`SUPABASE_ANON_KEY`/`SUPABASE_SERVICE_ROLE_KEY` secrets also had to point there — so those secrets ended up set to the production project, and every `integration` CI run's `scripts/test-rls-*.mjs` scripts created (and, on script failure, sometimes failed to clean up) real rows in it. Rewrote that section into an explicit, numbered checklist that calls this out directly as the actual fix, with exact GitHub Settings navigation and a verification step for both CI and Vercel Preview. Docs only — no code changes. The account-side steps themselves (creating the staging project, setting the secrets/env vars) still have to be done by whoever administers the Supabase/Vercel/GitHub accounts; nothing in this repo can do that from a coding session.
+
 ## Fix: stale RLS integration test left over from Phase 9's task-delete change
 
 Caught by actually running `npm run test:integration` against a real Supabase project (as part of verifying the staging-separation setup) — `scripts/test-rls-tasks.mjs` had a test named "manager A cannot delete employee A's task (delete is owner-only)" that predates Phase 9. Phase 9 deliberately added a new RLS policy, "Managers can delete reports' tasks," specifically to let a manager delete their own report's task — so that old test's assertion (delete affects zero rows) was now testing the exact opposite of the intended, shipped behavior, and failed for the correct reason: the delete succeeded.
