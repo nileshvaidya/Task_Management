@@ -1,5 +1,11 @@
 # Changelog
 
+## Fix: stale RLS integration test left over from Phase 9's task-delete change
+
+Caught by actually running `npm run test:integration` against a real Supabase project (as part of verifying the staging-separation setup) — `scripts/test-rls-tasks.mjs` had a test named "manager A cannot delete employee A's task (delete is owner-only)" that predates Phase 9. Phase 9 deliberately added a new RLS policy, "Managers can delete reports' tasks," specifically to let a manager delete their own report's task — so that old test's assertion (delete affects zero rows) was now testing the exact opposite of the intended, shipped behavior, and failed for the correct reason: the delete succeeded.
+
+Replaced it with two cases that match what Phase 9 actually shipped: manager A **can** delete employee A's task (their own direct report) and **cannot** delete employee B's task (a different manager's report) — the real boundary the new policy draws. `TEST_REPORT.md`'s Phase 2 and Phase 9 sections both referenced the old behavior by name; updated both. No application code changed — this is a test fixture updated to match a policy that was already correct in `schema.sql`.
+
 ## Bug fix: Admin screen text inputs lost focus on every keystroke
 
 Reported directly: typing into the new-project-name field on the Admin screen (Phase 9) lost focus after each character. Root cause: `admin.js`'s `paint()` does a full `content.innerHTML` re-render on every `store.setState()` call, and the field's `input` listener called `setState` on every keystroke — each character remounted the input as a fresh DOM node, dropping focus before the next character could land. Same bug class, same fix, as the New Task dialog's Phase 6 keyboard-accessibility fix: `paint()` now captures a re-findable selector (`focusSelectorFor`) plus caret position for whatever's focused before each re-render, and restores both afterward.
